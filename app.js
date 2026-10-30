@@ -9336,6 +9336,10 @@ if (!el) return;
 var ids = [], seen = {};
 players.concat(asgAll).forEach(function (p) { if (p.id && p.id !== '_mj' && !seen[p.id] && p.id !== myViewer) { seen[p.id] = 1; ids.push(p.id); } });
 plProfLoad(ids);
+/* Comptes réels seulement (ceux dont l'e-mail est connu) : les anciennes lignes players/u_* sans e-mail sont masquées.
+   Le filtre ne s'active que si au moins un e-mail est connu ; une ligne dont l'e-mail n'est pas encore résolu apparaît dès qu'il arrive. */
+var hasMail = function (i) { var m = plProf[i] && plProf[i].email; return !!(m && String(m).replace(/\s+/g, '')); };
+if (ids.some(hasMail)) ids = ids.filter(hasMail);
 var pjs = lib.filter(function (x) { return hasTag(x, 'PJ'); }), taken = {};
 asgAll.forEach(function (a) { if (a.pid) taken[a.pid] = a.id; });
 var html = ids.length ? ids.map(function (id) {
