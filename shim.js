@@ -541,9 +541,9 @@
   // Couleurs : jetons de la charte (style.css, modes clair et sombre), valeurs claires en repli.
   var LOGIN_CSS =
     '#tyl-login{position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483000;background:var(--bg,#F3F0E6);color:var(--ink,#1D2924);' +
-    'display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;font:inherit;overflow:auto}' +
+    'display:flex;padding:16px;box-sizing:border-box;font:inherit;overflow:auto}' +
     '#tyl-login *{box-sizing:border-box;font:inherit}' +
-    '#tyl-login .tyl-card{width:100%;max-width:380px;border:1px solid var(--line,#DAD5C1);border-radius:10px;padding:24px;background:var(--surface,#FBFAF4)}' +
+    '#tyl-login .tyl-card{margin:auto;width:100%;max-width:380px;border:1px solid var(--line,#DAD5C1);border-radius:10px;padding:24px;background:var(--surface,#FBFAF4)}' +
     '#tyl-login h1{font-size:1.4em;font-weight:bold;margin:0 0 6px}' +
     '#tyl-login p{margin:0 0 16px;line-height:1.4}' +
     '#tyl-login p.tyl-who{font-weight:bold;word-break:break-all}' +
@@ -584,6 +584,7 @@
   function buildSigninForm(say) {
     var busy = false;
     var form = el('form', { novalidate: 'novalidate', 'aria-busy': 'false' });
+    var logo = el('img', { src: 'logo.svg', alt: '', width: '56', height: '56', style: 'display:block;margin:0 auto .6rem' });
     var title = el('h1', { id: 'tyl-login-title' }, 'Table de combat');
     var intro = el('p', {}, 'Connecte-toi avec ton adresse e-mail et ton mot de passe.');
     var lEmail = el('label', { 'for': 'tyl-login-email' }, 'Adresse e-mail');
@@ -604,7 +605,7 @@
     row.appendChild(pw); row.appendChild(toggle);
     keepRow.appendChild(keep); keepRow.appendChild(lKeep);
     sep.appendChild(hint); sep.appendChild(link);
-    form.appendChild(title); form.appendChild(intro);
+    form.appendChild(logo); form.appendChild(title); form.appendChild(intro);
     form.appendChild(lEmail); form.appendChild(email);
     form.appendChild(lPw); form.appendChild(row);
     form.appendChild(keepRow); form.appendChild(btn); form.appendChild(sep);
