@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Import MJ</title>
+<style>
+  body { margin: 0; padding: 24px 16px; background: #f3ead3; color: #2b2a24; font: 16px/1.5 sans-serif; }
+  main { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 1.4em; margin: 0 0 12px; }
+  code { background: rgba(43, 42, 36, .08); padding: 1px 4px; border-radius: 4px; }
+  li { margin: 0 0 6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Import MJ (page sans la table de combat)</h1>
+  <p>Page réservée au MJ pour les imports ponctuels. La table de combat n'y tourne pas : ses abonnements ne peuvent donc pas modifier les données pendant l'import.</p>
+  <ol>
+    <li>Connecte-toi avec le compte MJ (lien magique).</li>
+    <li>Ouvre la console du navigateur (F12).</li>
+    <li>Données de l'ancienne plateforme : <code>tylImporterDonnees()</code>, puis choisis <code>export.json</code> (et <code>manifest.json</code>).</li>
+    <li>Contenus protégés et secrets du MJ : <code>tylImporterProtege()</code>, puis choisis <code>mi.json</code>, <code>clp.json</code> et/ou <code>secrets-mj.json</code>.</li>
+  </ol>
+  <p>Revenir à la <a href="./">table de combat</a>.</p>
+</main>
+<script>window.__tylImportPage = true;</script>
+<script src="supabase.js"></script>
+<script src="config.js"></script>
+<script src="shim.js"></script>
+<script src="protege-import.js"></script>
+<script src="donnees-import.js"></script>
+</body>
+</html>

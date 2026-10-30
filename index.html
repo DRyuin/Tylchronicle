@@ -1,0 +1,449 @@
+<title>Table de combat Tylchronicle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Alegreya+Sans:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style-img.css">
+
+
+<header class="bar mjbar">
+  <div class="brand"><svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18.5" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".55"/><path d="M20 6v28M20 15c-4-1-7-4-8-8M20 15c4-1 7-4 8-8M20 22c-5 0-8-3-9-6M20 22c5 0 8-3 9-6M20 26c-3 2-6 4-8 8M20 26c3 2 6 4 8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><div>
+    <h1>Tylchronicle</h1>
+    <span class="sub">Table de combat · <span id="sync" aria-live="polite">Chargement…</span></span>
+  </div></div>
+  <nav class="tabs" aria-label="Pages">
+    <button type="button" class="tab" id="tabCombat" aria-pressed="true">Combat</button>
+    <button type="button" class="tab" id="tabCreate" aria-pressed="false">Création</button>
+    <button type="button" class="tab" id="tabCamp" aria-pressed="false">Campagne</button>
+    <button type="button" class="tab" id="tabRules" aria-pressed="false">Règles</button>
+    <button type="button" class="tab" id="tabProg" aria-pressed="false">Progression</button>
+    <button type="button" class="tab" id="tabOut" hidden>Déconnexion</button>
+  </nav>
+  <div class="bz bz-t" role="group" aria-label="Outils"><span class="bzl" aria-hidden="true">Outils</span>
+  <button class="btn" id="snBtn" type="button" aria-expanded="false" aria-controls="snPanel" title="Carnet de séance : notes, bilan des combats, résumé">📓 Carnet<span class="sn-badge" id="snBadge"></span></button>
+  <button class="btn" id="inspBtn" type="button" aria-expanded="false" aria-controls="inspPop" title="Donner des points d'inspiration">✦ Inspiration</button>
+  </div>
+  <div class="bz bz-v" role="group" aria-label="Vues"><span class="bzl" aria-hidden="true">Vues</span>
+  <button class="btn" id="toPlayer" type="button" title="Voir la page comme une joueuse">👁 Vue joueuse</button>
+  </div>
+  <div class="turnctl" role="group" aria-label="Combat"><span class="bzl" aria-hidden="true">Combat</span>
+    <button class="btn" id="undo" type="button" title="Annuler la dernière action (Ctrl+Z)">↶ Annuler</button>
+    <button class="btn" id="prev" type="button" aria-label="Tour précédent" title="Revenir au tour précédent">‹</button>
+    <div class="roundbox"><span class="lbl">Round</span><span class="num" id="round">1</span></div>
+    <button class="btn primary" id="next" type="button">Démarrer le combat</button>
+    <details class="bmore" id="barMore"><summary class="btn" title="Rétablir, arrêter le combat, tout vider">Plus ▾</summary><div class="bmenu" role="group" aria-label="Plus d'actions de combat">
+    <button class="btn" id="redo" type="button" title="Rétablir (Ctrl+Y)" disabled>↷ Rétablir</button>
+    <button class="btn" id="stop" type="button" hidden>Stop combat</button>
+    <button class="btn danger" id="wipe" type="button">Tout vider</button>
+    <p class="bmh">« Stop » et « Tout vider » demandent une confirmation.</p>
+    </div></details>
+  </div>
+</header>
+
+<header class="bar" id="pbar" hidden>
+  <div class="brand"><svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18.5" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".55"/><path d="M20 6v28M20 15c-4-1-7-4-8-8M20 15c4-1 7-4 8-8M20 22c-5 0-8-3-9-6M20 22c5 0 8-3 9-6M20 26c-3 2-6 4-8 8M20 26c3 2 6 4 8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><div><h1>Tylchronicle</h1><span class="sub"><span class="pvsubl">Vue joueuse · </span><span id="psync" aria-live="polite">Chargement…</span><span class="pvsubl"> · </span><span id="pmj" class="mjdot"></span></span></div></div>
+  <button class="btn" id="toMJ" type="button" hidden>Retour MJ</button>
+  <details class="pvmenu" id="pvMenu"><summary class="btn" title="Aménager, règles, progression, musique" aria-label="Menu : aménager, règles, progression, musique"><span class="pvmi" aria-hidden="true">☰</span><span class="pvml">Menu</span></summary><div class="pvmenu-b" role="group" aria-label="Menu">
+  <button class="btn" id="pvEditBtn" type="button" hidden aria-pressed="false" title="Déplacer les blocs, choisir leur onglet, couleur, taille et colonnes">🎛 Aménager</button>
+  <button class="btn" id="pvRulesBtn" type="button" title="Règles de la table">📖 Règles</button>
+  <button class="btn" id="pvProgBtn" type="button" aria-haspopup="dialog" aria-controls="clpOv" title="Tableau de progression de chaque classe, niveaux 1 à 20">📈 Progression</button>
+  <button class="btn" id="pvSndBtn" type="button" aria-expanded="false" aria-controls="pvSndPop" title="Musique et effets sonores">🎵 Musique</button>
+  <button class="btn" id="pchange" type="button" hidden>Changer de personnage</button>
+  <button class="btn" id="pvOutBtn" type="button" hidden title="Quitter cette session">Se déconnecter</button>
+  <span class="sub" id="pvOutWho" hidden></span>
+  </div></details>
+  <div id="pvSndPop"><section class="box" id="pvSnd" aria-label="Son" hidden></section></div>
+</header>
+
+<section class="sn-pan" id="snPanel" role="dialog" aria-modal="false" aria-labelledby="snTitle" hidden>
+  <div class="sn-head"><h2 id="snTitle" tabindex="-1">📓 Carnet de séance</h2><button type="button" class="btn sm" id="snClose" aria-label="Fermer le carnet">✕</button></div>
+  <div class="sn-tabs" role="group" aria-label="Sections du carnet">
+    <button type="button" class="chip on" data-snv="carnet" aria-pressed="true">Carnet</button>
+    <button type="button" class="chip" data-snv="bilan" aria-pressed="false">Bilan du combat<span id="snBilN"></span></button>
+    <button type="button" class="chip" data-snv="resume" aria-pressed="false">Résumé</button>
+  </div>
+  <div id="snVCarnet">
+    <form id="snForm" class="sn-form" autocomplete="off">
+      <div class="sn-f"><label class="sn-lbl" for="snTag">Type</label><select id="snTag"><option value="">Note</option><option value="lieu">📍 Lieu</option><option value="dlg">💬 Dialogue</option><option value="dec">⚖️ Décision</option><option value="obj">🎒 Objet trouvé</option></select></div>
+      <div class="sn-f grow"><label class="sn-lbl" for="snIn">Nouvelle ligne (Entrée = ajouter)</label><input id="snIn" type="text" maxlength="2000" placeholder="Ce qui vient de se passer…"></div>
+      <button type="submit" class="btn sm primary">Ajouter</button>
+    </form>
+    <p class="hint" id="snMsg" role="status" aria-live="polite"></p>
+    <ol class="sn-list" id="snList" aria-label="Lignes du carnet"></ol>
+    <p class="hint">Début et fin des combats, objets donnés et XP s'ajoutent tout seuls. Les moments forts d'un combat arrivent vides (« à décrire ») avec un indice privé que toi seul vois : il n'est jamais envoyé ni publié.</p>
+    <div class="btnrow"><button type="button" class="btn sm" id="snClear">Nouvelle séance (vider le carnet)</button></div>
+  </div>
+  <div id="snVBilan" hidden></div>
+  <div id="snVResume" hidden>
+    <p class="hint">Rédige le récit de la séance à partir des lignes remplies du carnet. Les lignes vides ou passées sont ignorées ; les indices privés et les jets ne sont jamais envoyés.</p>
+    <div class="btnrow"><button type="button" class="btn primary" id="snGen">✨ Créer le résumé</button><button type="button" class="btn sm" id="snFb">Résumé sans IA (liste)</button><button type="button" class="btn sm" id="snStop" hidden>■ Stop</button></div>
+    <div class="sn-consent" id="snConsent" role="group" aria-labelledby="snConsT" hidden>
+      <p id="snConsT"><b>Envoyer le carnet à Claude ?</b> Le texte des lignes remplies et deux extraits d'« Histoire jusqu'ici » (pour le style) sont envoyés à Claude, sur ton compte Claude. Les indices privés, les jets et les chiffres de jeu sont retirés. Le navigateur peut te demander une autorisation la première fois.</p>
+      <div class="sn-row"><button type="button" class="btn sm primary" id="snGo">Envoyer à Claude</button><button type="button" class="btn sm" id="snNo">Annuler</button></div>
+    </div>
+    <p class="hint" id="snGenSt" role="status" aria-live="polite"></p>
+    <label class="sn-lbl" for="snOut">Résumé (modifiable)</label>
+    <textarea id="snOut" rows="12"></textarea>
+    <h3>Discord</h3>
+    <div class="btnrow"><button type="button" class="btn sm" id="snDiscB">Découper pour Discord</button></div>
+    <div id="snDisc"></div>
+    <h3>Histoire jusqu'ici</h3>
+    <label class="sn-lbl" for="snPubSel">Titre</label><select id="snPubSel"></select>
+    <label class="sn-lbl" for="snPubT">Titre complet</label><input type="text" id="snPubT" maxlength="160" placeholder="Part 3 — S2 : …">
+    <label class="sn-lbl" for="snPubD">Date / Partie</label><input type="text" id="snPubD" maxlength="60" placeholder="Part 3">
+    <div class="btnrow"><button type="button" class="btn sm primary" id="snPub">Publier dans Histoire jusqu'ici</button></div>
+    <div class="sn-conf" id="snPubC" role="group" aria-label="Confirmation de publication" hidden></div>
+    <p class="hint" id="snPubSt" role="status" aria-live="polite"></p>
+  </div>
+</section>
+
+<aside id="jdock" aria-label="Journal">
+  <button type="button" id="jdBtn" aria-expanded="false" aria-controls="log"><b>Journal</b><span id="jdLast"></span><i aria-hidden="true">▾</i></button>
+  <ol class="log" id="log" aria-live="polite"></ol>
+</aside>
+
+<div class="wrap" id="viewCombat">
+  <aside class="side side-l">
+    <details class="panel">
+      <summary>Bestiaire<span class="cnt" id="bcount"></span></summary>
+      <div class="pbody">
+        <input id="bs" type="search" autocomplete="off" placeholder="Chercher (gobelin, dragon, goblin…)" aria-label="Chercher une créature">
+        <div class="chips" id="bcat" role="group" aria-label="Catégorie"></div>
+        <details class="flt"><summary>Filtres</summary>
+        <div class="chips" id="btype" role="group" aria-label="Type de créature"></div>
+        <div class="chips" id="btags" role="group" aria-label="Tags" hidden></div>
+        <div class="fgrid">
+          <label for="bz">Taille<select id="bz"></select></label>
+          <label for="bsort">Trier par<select id="bsort"></select></label>
+          <label for="bfmin">FP min<select id="bfmin"></select></label>
+          <label for="bfmax">FP max<select id="bfmax"></select></label>
+          <label class="wide check" for="bleg"><input id="bleg" type="checkbox"> Légendaires seulement</label>
+        </div>
+        <div class="btnrow">
+          <button class="btn sm" id="bdir" type="button">Croissant ↑</button>
+          <button class="btn sm" id="breset" type="button">Réinitialiser les filtres</button>
+        </div>
+        </details>
+        <div class="qtyrow"><label for="bq2">Quantité à ajouter</label><input id="bq2" type="number" min="1" max="20" value="1" inputmode="numeric"></div>
+        <p class="hint" id="bres" aria-live="polite"></p>
+        <ul class="blist" id="blist"></ul>
+        <button class="btn sm" id="bmore" type="button" hidden>Afficher plus</button>
+        <p class="hint">« + Ajouter » met la créature dans le combat, « ☆ » la garde dans ta bibliothèque pour la modifier. Survole une ligne pour voir ses capacités. Source : aidedd.org (A–N) et SRD 5.1 (O–Z, noms français à vérifier).</p>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary>Grimoire<span class="cnt" id="scount"></span></summary>
+      <div class="pbody">
+        <p class="hint">Toutes les joueuses ont accès à tous les sorts. Ouvre un sort pour le lire et le lancer : jet d'attaque ou de sauvegarde, dégâts, soins.</p>
+        <div class="btnrow"><button type="button" class="btn sm primary" id="spNew">＋ Créer un sort</button></div>
+        <input id="ss" type="search" autocomplete="off" placeholder="Chercher (boule de feu, fireball…)" aria-label="Chercher un sort">
+        <div class="chips" id="slv" role="group" aria-label="Niveau du sort"></div>
+        <details class="flt"><summary>Filtres</summary>
+        <div class="chips" id="ssc" role="group" aria-label="École de magie"></div>
+        <div class="chips" id="scl" role="group" aria-label="Classe pouvant lancer le sort"></div>
+        <div class="fgrid">
+          <label for="sct">Incantation<select id="sct"></select></label>
+          <label for="srg">Portée<select id="srg"></select></label>
+          <label for="sdu">Durée<select id="sdu"></select></label>
+          <label for="sdt">Type de dégâts<select id="sdt"></select></label>
+          <label for="ssv">Jet de sauvegarde<select id="ssv"></select></label>
+          <label for="scm">Composantes<select id="scm"></select></label>
+          <label class="wide check" for="satk"><input id="satk" type="checkbox"> Jet d'attaque de sort</label>
+          <label for="ssrc">Source<select id="ssrc"></select></label>
+          <label for="ssort">Trier par<select id="ssort"><option value="n">Nom</option><option value="l">Niveau</option><option value="s">École</option></select></label>
+          <label class="check" for="sconc"><input id="sconc" type="checkbox"> Concentration</label>
+          <label class="check" for="srit"><input id="srit" type="checkbox"> Rituel</label>
+          <label class="wide check" for="sdmg"><input id="sdmg" type="checkbox"> Avec dégâts ou soins</label>
+        </div>
+        <div class="btnrow">
+          <button class="btn sm" id="sdir" type="button">Croissant ↑</button>
+          <button class="btn sm" id="sreset" type="button">Réinitialiser les filtres</button>
+        </div>
+        </details>
+        <details class="flt"><summary>Réglages de lancement</summary>
+        <h3>Réglages de lancement</h3>
+        <div class="fgrid">
+          <label for="catk">Bonus d'attaque de sort<input id="catk" type="number" inputmode="numeric" value="7"></label>
+          <label for="cdc">DD de sauvegarde<input id="cdc" type="number" inputmode="numeric" value="15"></label>
+          <label for="cmod">Mod. de caractéristique<input id="cmod" type="number" inputmode="numeric" value="4"></label>
+          <label for="clvl">Niveau du lanceur<input id="clvl" type="number" min="1" max="20" inputmode="numeric" value="5"></label>
+        </div>
+        </details>
+        <div id="sflow" aria-live="polite"></div>
+        <p class="hint" id="sres" aria-live="polite"></p>
+        <ul class="blist slist" id="slist"></ul>
+        <button class="btn sm" id="smore" type="button" hidden>Afficher plus</button>
+        <p class="hint">Descriptions en anglais (5etools). Noms français : aidedd.org pour la plupart, les autres sont à vérifier. Le lien « fiche » ouvre aidedd.org.</p>
+      </div>
+    </details>
+
+    <details class="panel" id="miPanel">
+      <summary>Objets magiques<span class="cnt" id="micount"></span></summary>
+      <div class="pbody">
+        <p class="hint">Les 268 objets magiques du Guide du maître et tes objets de la Bibliothèque (pastille « Perso »), à lire en grand : rareté, harmonisation et effets. Pour le MJ seulement, pour ne rien dévoiler aux joueuses.</p>
+        <details class="migbox" id="migBox"><summary>🎁 Objets donnés<span class="cnt" id="migcnt"></span></summary><div id="migList" aria-live="polite"></div></details>
+        <input id="miq" type="search" autocomplete="off" placeholder="Chercher (cape, anneau, épée…)" aria-label="Chercher un objet magique">
+        <div class="chips" id="miown" role="group" aria-label="Origine"><button type="button" class="chip" id="miownb" data-mown="1" aria-pressed="false">⭐ Mes objets<span class="n"></span></button></div>
+        <div class="chips" id="mity" role="group" aria-label="Catégorie"></div>
+        <div class="chips" id="mira" role="group" aria-label="Rareté"></div>
+        <div class="btnrow"><label class="check" for="miat"><input id="miat" type="checkbox"> Harmonisation requise</label><button class="btn sm" id="mirnd" type="button">🎲 Au hasard</button><button class="btn sm" id="mirst" type="button">Réinitialiser</button></div>
+        <p class="hint" id="mires" aria-live="polite"></p>
+        <ul class="milist" id="milist"></ul>
+        <button class="btn sm" id="mimore" type="button" hidden>Afficher plus</button>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary>Dés</summary>
+      <div class="pbody">
+        <div class="btnrow" id="dieRow"></div>
+        <div class="qtyrow">
+          <label for="dn">Nombre</label><input id="dn" type="number" min="1" max="20" value="1" inputmode="numeric">
+          <label for="dm">Bonus</label><input id="dm" type="number" value="0" inputmode="numeric">
+        </div>
+        <div class="btnrow">
+          <button class="btn sm" id="adv" type="button">d20 avantage</button>
+          <button class="btn sm" id="dis" type="button">d20 désavantage</button>
+        </div>
+        <div class="diceout" id="diceout" aria-live="polite"><span class="det">Choisis un dé.</span></div>
+        <ol class="hist" id="dhist"></ol>
+      </div>
+    </details>
+
+  </aside>
+  <section class="main-col" aria-label="Ordre d'initiative">
+    <div class="banner" id="banner" hidden>
+      <span>Combat d'exemple. Modifie-le comme tu veux, ou repars de zéro.</span>
+      <button class="btn sm" id="clearExample" type="button">Vider et commencer</button>
+    </div>
+    <div class="mj-split" id="mjSplit">
+    <details class="panel" id="mjSceneBox" open>
+      <summary>Vue combat</summary>
+      <div class="pbody">
+        <div class="mj-lay" role="group" aria-label="Disposition"><span class="muted">Disposition</span><button type="button" class="chip" data-mjlay="side" aria-pressed="false">◧ Carte à côté des actions</button><button type="button" class="chip" data-mjlay="wide" aria-pressed="false">⬒ Carte large</button><button type="button" class="chip" data-mjlay="pv" aria-pressed="false">🎮 Comme les joueuses</button><button type="button" class="chip" data-mjlay="stack" aria-pressed="false">☰ Empilée</button></div>
+        <div class="mj-toast" id="mjToast" aria-live="polite"></div>
+        <div id="mjScene"></div>
+        <details class="flt" id="mjSceneSet"><summary>Réglages : décor, taille, déplacement</summary><div class="mj-set"><label class="rowf">Décor <select id="scEnv" aria-label="Décor du combat"></select></label><p class="hint">Les joueuses voient ce décor dans leur « Vue combat ».</p>
+        <label class="rowf"><input type="checkbox" id="mjPoke"> Menu « Pokémon » du tour pour les monstres (dans la scène)</label>
+        <label class="rowf"><input type="checkbox" id="mpOn"> Utiliser une carte (distances, déplacements, obstacles)</label>
+        <div id="mpTools" hidden>
+          <div class="rowf"><label class="rowf">Largeur <input type="number" id="mpW" min="6" max="40" value="14"></label><label class="rowf">Hauteur <input type="number" id="mpH" min="4" max="28" value="9"></label></div>
+          <label class="rowf"><input type="checkbox" id="mpFree"> Déplacement libre (ignore la vitesse et l'ordre des tours)</label>
+          <div class="rowf"><button type="button" class="btn sm" id="mpAuto">Replacer tout le monde</button><button type="button" class="btn sm" id="mpRand">🎲 Obstacles au hasard</button><button type="button" class="btn sm" id="mpClear">Vider les obstacles</button></div>
+          <p class="hint">1 case = 1,5 m. Pendant un combat, un pion ne se déplace que pendant son tour, selon sa vitesse (cases = vitesse ÷ 1,5 m), terrain difficile ×2, ennemis bloquants. Coche « Déplacement libre » pour déplacer sans limite. Les joueuses peuvent explorer librement hors combat et interagir avec les objets visibles.</p>
+        </div>
+        </div></details>
+      </div>
+    </details>
+    <div class="mj-ops">
+    <details class="panel" id="mjEdBox" hidden><summary>🛠 Éditeur de carte</summary><div class="pbody"><div id="mjEd"></div></div></details>
+    <div class="now" id="now"></div>
+    <ol id="list"></ol>
+    <div class="empty" id="empty" hidden>
+      <p id="emptyText">Aucun combattant pour l'instant. Ajoute tout le groupe en un clic, un monstre depuis le Bestiaire, ou un PJ depuis la Bibliothèque.</p>
+      <button class="btn primary" id="addAllEmpty" type="button">Ajouter tout le groupe</button>
+    </div>
+    </div>
+    </div>
+  </section>
+
+  <aside class="side side-r">
+    <details class="panel" open>
+      <summary>Bibliothèque</summary>
+      <div class="pbody">
+        <form id="lform" hidden>
+          <h3 id="ltitle">Nouveau monstre</h3>
+          <div class="fgrid">
+            <label class="wide" for="ln">Nom<input id="ln" type="text" autocomplete="off" placeholder="Ex. : Cultiste"></label>
+            <label for="lk">Catégorie<select id="lk"><option value="mj">Monstre</option><option value="an">Animal</option><option value="pnj">PNJ</option><option value="pj">PJ</option></select></label>
+            <label for="lac">CA<input id="lac" type="number" inputmode="numeric" value="12"></label>
+            <label for="lhp">PV max<input id="lhp" type="number" min="1" inputmode="numeric" value="20"></label>
+            <label for="lb">Bonus d'initiative<input id="lb" type="number" inputmode="numeric" value="0"></label>
+            <label class="mjonly" for="lt">Type<select id="lt"></select></label>
+            <label class="mjonly" for="lz">Taille<select id="lz"><option value="TP">Très petite</option><option value="P">Petite</option><option value="M" selected>Moyenne</option><option value="G">Grande</option><option value="TG">Très grande</option><option value="Gig">Gigantesque</option></select></label>
+            <label class="mjonly" for="lfp">FP (niveau de menace)<input id="lfp" type="text" value="1" placeholder="1/2, 3, 10…"></label>
+            <label class="wide" for="lnotes">Attaques, capacités, tactique<textarea id="lnotes" rows="3" placeholder="Griffes +4 (1d6+3)…"></textarea></label>
+            <div class="wide imgrow">
+              <span class="avatar lg" id="limgprev"></span>
+              <div class="imgctl">
+                <label for="limgfile">Image (depuis ton appareil)</label>
+                <input id="limgfile" type="file" accept="image/*">
+                <button class="btn sm" id="limgclear" type="button">Retirer l'image</button>
+              </div>
+            </div>
+          </div>
+          <div class="fgrid" id="newonly">
+            <label for="lq">Quantité<input id="lq" type="number" min="1" max="20" value="1" inputmode="numeric"></label>
+            <label for="li">Initiative<input id="li" type="number" placeholder="auto (d20)" inputmode="numeric"></label>
+            <label class="wide check" for="lkeep"><input id="lkeep" type="checkbox" checked> Garder dans la bibliothèque</label>
+          </div>
+          <div class="formbtns">
+            <button class="btn primary sm" id="lAdd" type="button">Ajouter au combat</button>
+            <button class="btn sm" id="lSave" type="button">Enregistrer</button>
+            <button class="btn sm" id="lCancel" type="button">Annuler</button>
+            <button class="btn sm danger" id="lDel" type="button">Supprimer</button>
+          </div>
+        </form>
+        <p class="hint err" id="libmsg" hidden></p>
+
+        <div class="chips" id="libtags" role="group" aria-label="Filtrer par tag"></div>
+        <div class="sechead"><h3>Groupe</h3><button class="btn sm" id="newPj" type="button">+ Nouveau PJ</button></div>
+        <div class="tiles" id="tilesPj"></div>
+        <button class="btn sm" id="addAll" type="button">Ajouter tout le groupe</button>
+
+        <p class="hint">Clique un PJ pour l'ajouter au combat, le crayon pour le modifier. Les monstres, PNJ et animaux se piochent dans le Bestiaire (tes créations y sont rangées). Survole une carte ou un combattant pour voir son visuel et ses capacités.</p>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary>Joueuses</summary>
+      <div class="pbody stack">
+        <ul class="plist" id="plist"></ul>
+        <div class="stack"><button type="button" class="btn sm" data-trall="scan">✨ Compléter les fiches de tout le monde</button><div id="trAllOut" role="status" aria-live="polite"></div></div>
+        <p class="plink">Pour qu'elles jouent : menu Partager de cette page, accès « Contributeur ». Elles arrivent directement sur la vue joueuse. Ouvre cette page chez toi pour traiter leurs actions (attaques, sorts, fin de tour).</p>
+      </div>
+    </details>
+
+    <details class="panel" id="sndPanel">
+      <summary>🔊 Son et musique</summary>
+      <div class="pbody stack"><div id="sndPe"></div><div id="sndBody" class="stack"></div></div>
+    </details>
+
+    <details class="panel">
+      <summary>Gérer le combat</summary>
+      <div class="pbody stack">
+        <button class="btn" id="rerollMj" type="button">Relancer l'initiative des monstres</button>
+        <button class="btn" id="restart" type="button">Recommencer au round 1</button>
+        <button class="btn" id="restGroup" type="button">Repos long : soigner tout le groupe</button>
+        <button class="btn" id="restShort" type="button">Repos court : recharger les ressources</button>
+        <button class="btn" id="rmMj" type="button">Retirer tous les monstres</button>
+      </div>
+    </details>
+
+    <details class="panel" id="encPanel">
+      <summary>Rencontre et XP</summary>
+      <div class="pbody stack" id="encBody"></div>
+    </details>
+  </aside>
+</div>
+
+<div class="wrap" id="viewCreate" hidden>
+  <section class="main-col" aria-label="Création">
+    <h2 class="ctitle">Que veux-tu créer ?</h2>
+    <div class="hub" id="hub"></div>
+    <form id="cform" hidden></form>
+  </section>
+  <aside class="side">
+    <div class="panel"><div class="pbody">
+      <h3 id="cltitle">Mes créations</h3>
+      <ul class="blist clist" id="clist"></ul>
+    </div></div>
+  </aside>
+</div>
+
+<div class="wrap" id="viewCamp" hidden>
+  <section class="main-col" id="cpMain" aria-label="Campagne"></section>
+  <aside class="side" id="cpSide"></aside>
+</div>
+
+<div class="wrap" id="viewRules" hidden>
+  <section class="main-col" id="rlMain" aria-label="Règles"></section>
+</div>
+
+<div class="wrap" id="viewProg" hidden>
+  <section class="main-col" id="clpMain" aria-label="Progression des classes"></section>
+  <div class="main-col" id="progOutWrap" hidden><button class="btn" id="progOutBtn" type="button" hidden title="Quitter cette session">Se déconnecter</button> <span class="sub" id="progOutWho" hidden></span></div>
+</div>
+
+<div id="clpOv" hidden role="dialog" aria-modal="true" aria-labelledby="clpOvT"><div class="rl-ovbox clp-ovbox"><div class="rl-ovhead"><h2 id="clpOvT">📈 Progression</h2><button type="button" class="btn" id="clpOvX">Fermer</button></div><div id="clpOvBody"></div></div></div>
+
+<div id="rlOv" hidden role="dialog" aria-modal="true" aria-label="Règles"><div class="rl-ovbox"><div class="rl-ovhead"><h2>📖 Règles</h2><button type="button" class="btn" id="rlOvX">Fermer</button></div><div id="rlOvBody"></div></div></div>
+
+<div id="tip" role="tooltip" hidden></div>
+
+
+<div class="wrap pv" id="viewPlayer" hidden>
+  <nav class="pvtabs-bar" id="pvTabs" role="tablist" aria-label="Sections de ma page" hidden>
+    <button type="button" role="tab" id="pvTab-jouer" data-pvtab="jouer" aria-selected="true" aria-controls="pvMain"><span class="pvti" aria-hidden="true">⚔</span><span class="pvtl">Jouer</span><span class="pvtb" hidden aria-hidden="true">!</span><span class="pvsr pvtbs" hidden> (c'est ton tour)</span></button>
+    <button type="button" role="tab" id="pvTab-fiche" data-pvtab="fiche" aria-selected="false" aria-controls="pvMain" tabindex="-1"><span class="pvti" aria-hidden="true">📜</span><span class="pvtl">Ma fiche</span></button>
+    <button type="button" role="tab" id="pvTab-sorts" data-pvtab="sorts" aria-selected="false" aria-controls="pvMain" tabindex="-1"><span class="pvti" aria-hidden="true">✨</span><span class="pvtl">Sorts &amp; objets</span></button>
+    <button type="button" role="tab" id="pvTab-histoire" data-pvtab="histoire" aria-selected="false" aria-controls="pvMain" tabindex="-1"><span class="pvti" aria-hidden="true">📖</span><span class="pvtl">Histoire</span></button>
+  </nav>
+  <div id="pvTurnTop" class="turnbanner" role="status" aria-live="polite" hidden></div>
+  <aside id="pvPanel" hidden aria-label="Réglages de mon espace"><h2>🎛 Mon espace</h2><div id="pvLay"></div></aside>
+  <section class="box" id="pvWiz" hidden aria-label="Création de personnage"></section>
+  <section class="box" id="pvPick" hidden aria-label="Choix du personnage"></section>
+  <div class="pvview" id="pvView" hidden role="group" aria-label="Affichage">
+    <button type="button" class="btn" data-pview="scene" aria-pressed="true">⚔ Vue combat</button>
+    <button type="button" class="btn" data-pview="classic" aria-pressed="false">☰ Vue classique</button>
+  </div>
+  <div id="pvMain" class="pvgrid" hidden>
+    <section id="pvScene" aria-label="Vue combat" data-pvt="jouer" hidden></section>
+    <details class="box" id="pvHow" data-pvt="histoire"><summary><h2 style="display:inline">❔ Comment ça marche</h2></summary>
+      <ol>
+        <li><b>Ton tour</b> : le bandeau en haut devient doré « C'est ton tour ». Tes boutons d'action s'activent.</li>
+        <li><b>Attaquer</b> : touche « ⚔ Attaquer », choisis ton arme puis ta cible. Le MJ reçoit ton jet. Finis par « Terminer mon tour ». Action bonus, réaction, familier ou texte libre : « Autre action… ».</li>
+        <li><b>Inspiration ✦</b> : après un jet raté, touche « Relancer (−1 inspiration) » si tu as des points.</li>
+        <li><b>Onglets</b> : « Jouer » pour le combat et tes ressources, « Ma fiche », « Sorts &amp; objets », « Histoire » (dés et message au MJ, histoire, carte, notes). Le menu ☰ en haut : aménager ta page, règles, progression, musique.</li>
+      </ol>
+    </details>
+    <section class="box pvidle" id="pvIdle" data-pvt="jouer" hidden></section>
+    <div class="pvftabs" id="pvFTabs" role="tablist" aria-label="Parties de ma fiche" data-pvt="fiche" hidden></div>
+    <div class="pvcol" id="pvLeft">
+    <div id="pvStatus" style="display:flex;flex-direction:column;gap:14px;min-width:0"></div>
+    <section class="box" id="pvTrack" aria-label="Mes ressources" hidden></section>
+    <details class="box" id="pvEditBox">
+      <summary><h2 style="display:inline">Ma fiche</h2></summary>
+      <div id="pvEdit" style="display:flex;flex-direction:column;gap:10px"></div>
+    </details>
+    <details class="box shbox" id="pvShId" hidden><summary><h2 style="display:inline">Identité et combat</h2></summary><div class="shb" data-shs="pvShId"></div></details>
+    <details class="box shbox" id="pvShAb" hidden><summary><h2 style="display:inline">Caractéristiques, jets et compétences</h2></summary><div class="shb" data-shs="pvShAb"></div></details>
+    <details class="box shbox" id="pvShLg" hidden><summary><h2 style="display:inline">Maîtrises et langues</h2></summary><div class="shb" data-shs="pvShLg"></div></details>
+    <details class="box shbox" id="pvShPe" hidden><summary><h2 style="display:inline">Personnalité</h2></summary><div class="shb" data-shs="pvShPe"></div></details>
+    <details class="box shbox" id="pvShEq" hidden><summary><h2 style="display:inline">Équipement et trésor</h2></summary><div class="shb" data-shs="pvShEq"></div></details>
+    <details class="box shbox" id="pvShBio" hidden><summary><h2 style="display:inline">Apparence et histoire</h2></summary><div class="shb" data-shs="pvShBio"></div></details>
+    <details class="box shbox" id="pvShMg" hidden><summary><h2 style="display:inline">Magie : DD et emplacements</h2></summary><div class="shb" data-shs="pvShMg"></div></details>
+    <details class="box" id="pvSpellBox">
+      <summary><h2 style="display:inline">Sorts</h2></summary>
+      <div id="pvSpEd"></div>
+      <div class="rowf"><input type="search" id="pvsq" placeholder="Chercher un sort" aria-label="Chercher un sort"><label class="rowf"><select id="pvsmine" aria-label="Quels sorts afficher"><option value="mine">Mes sorts (ma fiche)</option><option value="class">Tous les sorts de ma classe</option><option value="all">Tout le grimoire</option></select></label></div>
+      <div class="rowf" id="pvslv" role="group" aria-label="Niveau"></div>
+      <div class="rowf"><label class="rowf">Classe <select id="pvscl" aria-label="Classe"></select></label></div>
+      <div class="rowf"><label for="pvslot">Emplacement</label><select id="pvslot"><option value="0">Niveau du sort</option></select></div>
+      <p class="wzinfo" id="pvscast" hidden></p>
+      <div class="pcards" id="pvsl"></div>
+    </details>
+    <details class="box" id="pvDiceBox">
+      <summary><h2 style="display:inline">Dés et message</h2></summary>
+      <div class="rowf" id="pvdice"></div>
+      <label class="rowf"><input type="checkbox" id="pvdshare" checked> Montrer mes jets au MJ</label>
+      <div class="dres" id="pvdres" aria-live="polite"></div>
+      <div class="rowf"><input type="text" id="pvsay" placeholder="Dire quelque chose au MJ" aria-label="Message au MJ"><button type="button" class="btn sm" id="pvsaybtn">Envoyer</button></div>
+    </details>
+    <details class="box" id="pvMiBox"><summary><h2 style="display:inline">💎 Mes objets magiques</h2><span class="cnt" id="pvMiCnt"></span></summary><div id="pvMi"></div></details>
+    <details class="box" id="pvStoryBox"><summary><h2 style="display:inline">Histoire jusqu'ici</h2></summary><div class="pvstory" id="pvStory"></div></details>
+    <details class="box" id="pvMapBox"><summary><h2 style="display:inline">🗺️ Carte du monde</h2></summary><div id="pvMap"></div></details>
+    <details class="box" id="pvNotesBox"><summary><h2 style="display:inline">📝 Notes</h2></summary><div id="pvNotes" style="display:flex;flex-direction:column;gap:10px"></div></details>
+  
+    </div>
+    <div class="pvcol" id="pvRight">
+      <div id="pvStatusR" style="display:flex;flex-direction:column;gap:14px;min-width:0"></div>
+    <section class="box" id="pvActions" aria-label="Actions"></section>
+    </div>
+  </div>
+</div>
+
+<div id="cfBanner" hidden role="alert"></div>
+<div id="sndMini" hidden></div>
+<script src="supabase.js"></script>
+<script src="config.js"></script>
+<script src="shim.js"></script>
+<script src="shim-assets.js"></script>
+<script src="data.js"></script>
+<script src="app.js"></script>
+
+<script src="extra.js"></script>
+<script src="protege-import.js"></script>
+
+

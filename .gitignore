@@ -1,0 +1,15 @@
+protege/
+
+# Données privées (export de l ancienne plateforme)
+export/
+*.export.json
+
+# Secrets du MJ (missions, lance, lore) : jamais dans le depot
+secrets-mj.json
+*.avant-*.js
+
+# Notes internes et tests : jamais publies
+etat.md
+shimtest/
+tasks/
+*.md.bak
