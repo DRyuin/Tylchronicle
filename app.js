@@ -4557,7 +4557,7 @@ function myEntry() { return pv.pid ? libById(pv.pid) : null; }
 function myC() {
 var e = myEntry();
 if (!e) return null;
-for (var i = 0; i < S.combatants.length; i++) { var c = S.combatants[i]; if (c.kind === 'pj' && (c.libId === e.id || c.base === e.name)) return c; }
+for (var i = 0; i < S.combatants.length; i++) { var c = S.combatants[i]; if (c.kind === 'pj' && c.libId && c.libId === e.id) return c; }
 return null;
 }
 var CAST_AB = { 'Magicien': 'int', 'Artificier': 'int', 'Clerc': 'sag', 'Clerc (variante)': 'sag', 'Druide': 'sag', 'Druide (enfant de la mer)': 'sag', 'Rôdeur': 'sag', 'Barde': 'cha', 'Ensorceleur': 'cha', 'Occultiste': 'cha', 'Paladin': 'cha' };
@@ -9103,12 +9103,12 @@ return withFloor(c0 ? (c0.fl | 0) : FL, function () { return procAction0(a); });
 }
 /* Audit E2 : une action n'est appliquée que si son acteur appartient à l'expéditrice (a.from, imposé par le serveur
    et le shim : uid authentifié). Joueuse : son personnage attribué (assign.pid), ou un compagnon / une invocation qui
-   en dépend (owner). MJ (a.from = son propre uid) : tout. Actions sans acteur : seulement « say » d'une joueuse attribuée. */
+   en dépend (owner), reconnu par libId uniquement (M1 : jamais par le nom). MJ (a.from = son propre uid) : tout. Actions sans acteur : seulement « say » d'une joueuse attribuée. */
 function actOwnPid(a) { var as = a && a.from ? asgOf(String(a.from)) : null; return as && as.pid ? String(as.pid) : ''; }
 function actIsMine(c, pid) {
-var e = libById(pid), n = 0;
+var n = 0;
 while (c && n++ < 8) {
-if (c.kind === 'pj' && (c.libId === pid || (e && c.base === e.name))) return true;
+if (c.kind === 'pj' && c.libId && c.libId === pid) return true;
 c = c.owner && c.owner !== c.id ? byId(c.owner) : null;
 }
 return false;
