@@ -2108,3 +2108,42 @@ body:has(#viewPlayer.pvtabs:not([hidden])) #sndMini { bottom: calc(61px + env(sa
 #viewPlayer:not(.pvedit) #pvMain.two > #pvScene { order: -48; }
 #viewPlayer:not(.pvedit) #pvMain.two #pvStatusR > .pvord { order: -20; }
 }
+
+/* ===== Mobile : fondations C2 (30/10/2026). Bloc unique, borné aux écrans < 1024 px : l'ordinateur reste identique. =====
+   Champs 16 px (pas de zoom iOS), cibles >= 44 px (min-height/min-width, pas de zoom), touch-action, tap-highlight,
+   zones sûres, 100dvh, overscroll contenu. Les barres fixes qui masquent le contenu et les tableaux relèvent de D/E. */
+@media (max-width: 1023px) {
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; -webkit-tap-highlight-color: rgba(169, 117, 20, .12); overscroll-behavior-y: contain;
+  padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+body { overscroll-behavior-y: contain; }
+a, button, summary, select, input, textarea, label, [role="button"], [role="tab"], .btn, .chip, .tab { touch-action: manipulation; }
+.pczoom, .sn-pan, .wzdet, #pvPanel, .mp-scroll, [role="dialog"] { overscroll-behavior: contain; }
+
+/* Champs : 16 px minimum (iOS zoome en dessous). :not(#_) pour passer devant les règles de classe plus petites. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="file"]):not([type="color"]):not(#_),
+select:not(#_), textarea:not(#_) { font-size: 16px; min-height: 44px; }
+textarea:not(#_) { min-height: 88px; }
+
+/* Cibles tactiles : 44 x 44 minimum, hors carte et jetons (cases de la grille). */
+button:not(#_):not(.mp-grid *):not(.mp-tok):not(.sc-unit), summary:not(#_), [role="button"]:not(#_):not(.mp-grid *):not(.mp-tok),
+[role="tab"]:not(#_), a.btn:not(#_), a.chip:not(#_) { min-height: 44px; }
+button:not(#_):not(.mp-grid *):not(.mp-tok):not(.sc-unit), [role="button"]:not(#_):not(.mp-grid *):not(.mp-tok), [role="tab"]:not(#_) { min-width: 44px; }
+
+/* Zones sûres (encoche, barre d'accueil) pour les barres fixes existantes, sans les redessiner. */
+#viewPlayer > .pvtabs-bar { padding-left: max(4px, env(safe-area-inset-left, 0px)); padding-right: max(4px, env(safe-area-inset-right, 0px)); }
+#sndMini { padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px)); }
+#jdock { right: max(12px, env(safe-area-inset-right, 0px)); }
+#jdBtn { min-height: 44px; touch-action: manipulation; }  /* #jdBtn est en all: unset */
+#cfBanner { left: max(8px, env(safe-area-inset-left, 0px)); right: max(8px, env(safe-area-inset-right, 0px)); }
+.sn-pan { right: max(12px, env(safe-area-inset-right, 0px)); }
+/* 100dvh à la place de 100vh : la barre d'adresse mobile ne rogne plus les plein écran. */
+@supports (height: 100dvh) {
+.wzdet { max-height: calc(100dvh - 24px); }
+#viewCombat.lay-side #mjSceneBox { max-height: calc(100dvh - 110px); }
+#viewCombat.lay-pv #mjScene .scene > .sc-left, #pvScene .scene > .sc-left { max-height: calc(100dvh - 80px); }
+#viewCombat.lay-pv #mjSceneBox .mp-scroll, #pvScene .mp-scroll { max-height: calc(100dvh - 120px); }
+#pvPanel { max-height: calc(100dvh - 110px); }
+.sn-pan { max-height: calc(100dvh - 96px); }
+@media (max-width: 560px) { .sn-pan { max-height: calc(100dvh - 16px); } }
+}
+}
