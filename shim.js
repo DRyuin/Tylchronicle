@@ -893,6 +893,347 @@
   }
 
   // =====================================================================
+  // Espace compte : fenêtre « Mon compte » (MJ et joueuses), ouverte par
+  // window.tylAccountOpen() (boutons posés par app.js seulement si cette
+  // fonction existe). Tout texte passe par textContent (aucun balisage injecté) ;
+  // aucun mot de passe n'est lu au-delà de l'appel, journalisé, stocké ni
+  // affiché ; aucun jeton n'est lu. Voir tasks/spec-compte.md.
+  // =====================================================================
+  var ACCT_CSS =
+    '#tyl-acct{position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147482000;background:rgba(0,0,0,.55);display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow:auto;box-sizing:border-box}' +
+    '#tyl-acct .rl-ovbox{max-width:560px;margin:0 auto}' +
+    '#tyl-acct h2,#tyl-acct h3{margin:0}' +
+    '#tyl-acct section{margin:0 0 16px;padding-top:12px;border-top:1px solid var(--line,#DAD5C1)}' +
+    '#tyl-acct section.tyl-first{border-top:0;padding-top:0}' +
+    '#tyl-acct dl{margin:8px 0 0;display:grid;grid-template-columns:max-content 1fr;gap:6px 14px}' +
+    '#tyl-acct dt{font-weight:bold}' +
+    '#tyl-acct dd{margin:0;word-break:break-word;min-width:0}' +
+    '#tyl-acct dd.tyl-small{font-size:.75rem}' +
+    '#tyl-acct p{margin:8px 0}' +
+    '#tyl-acct label{display:block;margin:10px 0 4px;font-weight:bold}' +
+    '#tyl-acct input[type=password],#tyl-acct input[type=email],#tyl-acct input[type=text]{display:block;width:100%;min-height:44px;padding:8px 10px;border:1px solid var(--line-strong,#808878);border-radius:8px;background:var(--surface,#FBFAF4);color:var(--ink,#1D2924);font-size:16px;box-sizing:border-box}' +
+    '#tyl-acct input[aria-invalid=true]{border-color:var(--bad,#AE382C)}' +
+    '#tyl-acct .tyl-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0}' +
+    '#tyl-acct .btn{min-height:44px}' +
+    '#tyl-acct .tyl-msg{min-height:1.3em;margin:8px 0 0}' +
+    '#tyl-acct .tyl-msg.err{color:var(--bad,#AE382C)}' +
+    '#tyl-acct .tyl-msg.ok{color:var(--ok,#2F6A43)}' +
+    '@media (max-width:520px){#tyl-acct dl{grid-template-columns:1fr}#tyl-acct dt{margin-top:6px}}';
+  var MSG_NAME_BAD = 'Saisis un nom (40 caractères maximum).';
+  var MSG_NAME_NO016 = 'Le changement de nom n\'est pas encore disponible sur le serveur.';
+  var MSG_SAVE_FAIL = 'L\'enregistrement a échoué. Réessaie.';
+  var MSG_REAUTH = 'Pour des raisons de sécurité, reconnecte-toi puis réessaie.';
+  var MSG_NOPW = 'Le mot de passe actuel ne peut pas être affiché : il n\'est jamais conservé en clair, personne ne peut le relire (même pas le MJ). Si tu l\'as oublié, change-le ci-dessous ; l\'ancien n\'est pas demandé.';
+  var MSG_FORGOT = 'Mot de passe oublié ? Sur l\'écran de connexion, choisis « Première connexion / Mot de passe oublié ? » : un lien magique t\'est envoyé par e-mail, puis tu choisis un nouveau mot de passe.';
+  var NAME_MAX = 40;
+  var acct = null;
+
+  function fmtDate(iso) {
+    try {
+      if (!iso) return 'inconnue';
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return 'inconnue';
+      return d.toLocaleString('fr-FR');
+    } catch (e) { return 'inconnue'; }
+  }
+  function cleanName(v) { return String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').replace(/^ | $/g, ''); }
+  function shown(node, on) { if (on) node.removeAttribute('hidden'); else node.setAttribute('hidden', 'hidden'); }
+  function focusFirst(list) { var i; for (i = 0; i < list.length; i++) { try { list[i].focus(); return; } catch (e) { /* ignoré */ } } }
+
+  function emailMessage(err) {
+    var c = errText(err);
+    if (isRate(err)) return MSG_MANY;
+    if (isNet(err)) return MSG_NET;
+    if (err.status >= 500) return MSG_SAVE_FAIL;
+    if (err.status === 401 || /session_not_found|session missing/i.test(c)) return 'Session expirée. Reconnecte-toi puis réessaie.';
+    return 'Cette adresse ne peut pas être utilisée. Essaie-en une autre.'; // déjà prise, refusée : un seul texte
+  }
+  function passwordMessage(err) {
+    var c = errText(err);
+    if (/reauthentication_needed|reauthenticat/i.test(c)) return { t: MSG_REAUTH, relog: true };
+    if (isRate(err)) return { t: MSG_MANY };
+    if (isNet(err)) return { t: MSG_NET };
+    if (/at least|too short|minimum/i.test(c)) return { t: 'Au moins ' + PW_MIN + ' caractères.' };
+    if (isSamePwd(err)) return { t: 'Choisis un mot de passe différent de l\'ancien.' };
+    if (/weak_password|weak|pwned|compromised|known/i.test(c) || err.status === 422) return { t: 'Ce mot de passe est trop faible ou connu. Choisis-en un autre.' };
+    if (err.status === 401 || /session/i.test(c)) return { t: 'Session expirée. Reconnecte-toi puis réessaie.', relog: true };
+    return { t: MSG_SAVE_FAIL };
+  }
+
+  function closeAccount() {
+    if (!acct) return;
+    var a = acct, i, h = a.hidden || [];
+    acct = null;
+    for (i = 0; i < h.length; i++) { try { h[i].removeAttribute('inert'); h[i].removeAttribute('aria-hidden'); } catch (e) { /* ignoré */ } }
+    try { if (a.root.parentNode) a.root.parentNode.removeChild(a.root); } catch (e) { /* ignoré */ }
+    try { if (a.style.parentNode) a.style.parentNode.removeChild(a.style); } catch (e) { /* ignoré */ }
+    try { if (a.opener && a.opener.focus) a.opener.focus(); } catch (e) { /* ignoré */ }
+  }
+
+  function buildAccount() {
+    var refs = {}, ctl = [];
+    function E(tag, attrs, text) { var n = el(tag, attrs, text); if (attrs && attrs.id) refs[attrs.id] = n; if (tag === 'button' || tag === 'input') ctl.push(n); return n; }
+    var style = E('style', { id: 'tyl-acct-css' });
+    style.textContent = ACCT_CSS;
+    var root = E('div', { id: 'tyl-acct', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'acct-title' });
+    var box = E('div', { 'class': 'rl-ovbox' });
+    var head = E('div', { 'class': 'rl-ovhead' });
+    var closeBtn = E('button', { type: 'button', 'class': 'btn', id: 'acct-close' }, 'Fermer');
+    var busy = { pw: false, email: false, name: false, all: false };
+    var self = { root: root, style: style, opener: null, hidden: [], closeBtn: closeBtn };
+    var cur = { email: userEmail || '', name: '' };
+    function say(id, text, kind) { var m = refs[id]; if (m) { m.textContent = text || ''; m.setAttribute('class', 'tyl-msg' + (kind ? ' ' + kind : '')); } return m; }
+    function mark(input, on) { if (on) input.setAttribute('aria-invalid', 'true'); else input.removeAttribute('aria-invalid'); }
+    function field(form, id, label, attrs) {
+      var a = { id: id, name: id }, k;
+      for (k in attrs) if (hasOwn(attrs, k)) a[k] = attrs[k];
+      var l = E('label', { 'for': id }, label), inp = E('input', a);
+      form.appendChild(l); form.appendChild(inp);
+      return inp;
+    }
+    function row(dl, label, id, small) {
+      var dt = E('dt', {}, label), dd = E('dd', { id: id, 'class': small ? 'tyl-small' : '' }, '…');
+      dl.appendChild(dt); dl.appendChild(dd);
+      return { dt: dt, dd: dd };
+    }
+    head.appendChild(E('h2', { id: 'acct-title' }, 'Mon compte')); head.appendChild(closeBtn);
+    box.appendChild(head);
+
+    // -- Informations (lecture)
+    var s1 = E('section', { 'class': 'tyl-first', 'aria-label': 'Informations du compte' });
+    var dl = E('dl');
+    row(dl, 'E-mail', 'acct-email'); row(dl, 'Rôle', 'acct-role'); row(dl, 'Nom affiché', 'acct-name');
+    row(dl, 'Personnage', 'acct-char'); row(dl, 'Dernière connexion', 'acct-last');
+    var pend = row(dl, 'Changement d\'e-mail', 'acct-pending'); shown(pend.dt, false); shown(pend.dd, false);
+    var uidRow = row(dl, 'Identifiant (support)', 'acct-uid', true); shown(uidRow.dt, false); shown(uidRow.dd, false);
+    s1.appendChild(dl); box.appendChild(s1);
+
+    // -- Mot de passe
+    var s2 = E('section', { 'aria-labelledby': 'acct-h-pw' });
+    s2.appendChild(E('h3', { id: 'acct-h-pw' }, 'Mot de passe'));
+    s2.appendChild(E('p', { id: 'acct-nopw' }, MSG_NOPW));
+    var fPw = E('form', { id: 'acct-pw-form', novalidate: 'novalidate' });
+    var p1 = field(fPw, 'acct-pw1', 'Nouveau mot de passe', { type: 'password', autocomplete: 'new-password' });
+    var p2 = field(fPw, 'acct-pw2', 'Nouveau mot de passe (encore une fois)', { type: 'password', autocomplete: 'new-password' });
+    var pwActs = E('div', { 'class': 'tyl-actions' });
+    var pwSave = E('button', { type: 'submit', id: 'acct-pw-save', 'class': 'btn' }, 'Changer mon mot de passe');
+    var pwToggle = E('button', { type: 'button', 'class': 'btn', 'aria-pressed': 'false', 'aria-label': 'Afficher les mots de passe saisis' }, 'Afficher');
+    pwToggle.addEventListener('click', function () {
+      var on = pwToggle.getAttribute('aria-pressed') !== 'true';
+      p1.setAttribute('type', on ? 'text' : 'password'); p2.setAttribute('type', on ? 'text' : 'password');
+      pwToggle.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    pwActs.appendChild(pwSave); pwActs.appendChild(pwToggle); fPw.appendChild(pwActs);
+    var pwMsg = E('p', { id: 'acct-pw-msg', 'class': 'tyl-msg', role: 'status', 'aria-live': 'polite' });
+    var pwRelog = E('div', { 'class': 'tyl-actions' });
+    fPw.appendChild(pwMsg); fPw.appendChild(pwRelog);
+    s2.appendChild(fPw); box.appendChild(s2);
+    function wipePw() { p1.value = ''; p2.value = ''; p1.setAttribute('type', 'password'); p2.setAttribute('type', 'password'); pwToggle.setAttribute('aria-pressed', 'false'); }
+    fPw.addEventListener('submit', function (ev) {
+      if (ev && ev.preventDefault) ev.preventDefault();
+      var a = p1.value, b = p2.value, bad;
+      if (busy.pw) { wipePw(); return; }
+      bad = checkNewPassword(a, b);
+      if (bad) { say('acct-pw-msg', bad, 'err'); mark(p1, true); mark(p2, true); try { p1.focus(); } catch (e) { /* ignoré */ } return; }
+      mark(p1, false); mark(p2, false);
+      busy.pw = true; pwSave.disabled = true; say('acct-pw-msg', 'Enregistrement…', '');
+      while (pwRelog.children.length) pwRelog.removeChild(pwRelog.children[0]);
+      Promise.resolve().then(function () {
+        return client.auth.updateUser({ password: a, data: { pwd_set: true, pwd_at: Date.now() } });
+      }).then(function (r) {
+        wipePw(); a = b = '';
+        if (r && r.error) throw r.error;
+        say('acct-pw-msg', 'Mot de passe changé.', 'ok');
+      }).then(null, function (e) {
+        wipePw(); a = b = '';
+        noteErr('account.password', { code: e && e.code, status: e && e.status }); // jamais le message ni la valeur
+        var m = passwordMessage(e || { status: 0 });
+        say('acct-pw-msg', m.t, 'err');
+        if (m.relog) {
+          var rb = E('button', { type: 'button', 'class': 'btn' }, 'Me reconnecter');
+          rb.addEventListener('click', function () { rb.disabled = true; if (window.tylSignOut) window.tylSignOut(); });
+          pwRelog.appendChild(rb);
+        }
+      }).then(function () { busy.pw = false; pwSave.disabled = false; });
+    });
+
+    // -- E-mail
+    var s3 = E('section', { 'aria-labelledby': 'acct-h-mail' });
+    s3.appendChild(E('h3', { id: 'acct-h-mail' }, 'Adresse e-mail'));
+    s3.appendChild(E('p', {}, 'Un lien de confirmation est envoyé à la nouvelle adresse. Tant que tu ne l\'as pas ouvert, l\'ancienne adresse reste valable.'));
+    var fMail = E('form', { id: 'acct-email-form', novalidate: 'novalidate' });
+    var mIn = field(fMail, 'acct-email-new', 'Nouvelle adresse e-mail', { type: 'email', autocomplete: 'email', autocapitalize: 'none', spellcheck: 'false' });
+    var mActs = E('div', { 'class': 'tyl-actions' });
+    var mSave = E('button', { type: 'submit', id: 'acct-email-save', 'class': 'btn' }, 'Changer mon e-mail');
+    mActs.appendChild(mSave); fMail.appendChild(mActs);
+    fMail.appendChild(E('p', { id: 'acct-email-msg', 'class': 'tyl-msg', role: 'status', 'aria-live': 'polite' }));
+    s3.appendChild(fMail); box.appendChild(s3);
+    fMail.addEventListener('submit', function (ev) {
+      if (ev && ev.preventDefault) ev.preventDefault();
+      if (busy.email) return;
+      var mail = normEmail(mIn.value);
+      if (!EMAIL_RE.test(mail)) { say('acct-email-msg', 'Adresse e-mail invalide.', 'err'); mark(mIn, true); return; }
+      if (mail === normEmail(cur.email)) { say('acct-email-msg', 'C\'est déjà l\'adresse de ce compte.', 'err'); mark(mIn, true); return; }
+      mark(mIn, false);
+      busy.email = true; mSave.disabled = true; say('acct-email-msg', 'Envoi…', '');
+      Promise.resolve().then(function () {
+        return client.auth.updateUser({ email: mail }, { emailRedirectTo: CFG.redirect });
+      }).then(function (r) {
+        if (r && r.error) throw r.error;
+        var u = r && r.data && r.data.user;
+        say('acct-email-msg', 'Un message de confirmation a été envoyé à ' + mail + '. Ouvre le lien de confirmation qu\'il contient, dans le même navigateur que celui-ci. ' +
+          'Selon le réglage du serveur, un second lien arrive aussi sur ton ancienne adresse : il faut alors confirmer les deux. ' +
+          'Tant que ce n\'est pas fait, ton ancienne adresse (' + cur.email + ') reste toujours valable : continue de te connecter avec elle.', 'ok');
+        pend.dd.textContent = 'En attente de confirmation : ' + ((u && u.new_email) || mail);
+        shown(pend.dt, true); shown(pend.dd, true);
+        mIn.value = '';
+      }).then(null, function (e) {
+        noteErr('account.email', { code: e && e.code, status: e && e.status });
+        say('acct-email-msg', emailMessage(e || { status: 0 }), 'err');
+      }).then(function () { busy.email = false; mSave.disabled = false; });
+    });
+
+    // -- Nom affiché
+    var s4 = E('section', { 'aria-labelledby': 'acct-h-name' });
+    s4.appendChild(E('h3', { id: 'acct-h-name' }, 'Nom affiché'));
+    s4.appendChild(E('p', {}, 'C\'est le nom que voient les autres à la table. Tu ne peux modifier que le tien.'));
+    var fName = E('form', { id: 'acct-name-form', novalidate: 'novalidate' });
+    var nIn = field(fName, 'acct-name-new', 'Nom affiché', { type: 'text', autocomplete: 'nickname', maxlength: String(NAME_MAX) });
+    var nActs = E('div', { 'class': 'tyl-actions' });
+    var nSave = E('button', { type: 'submit', id: 'acct-name-save', 'class': 'btn' }, 'Changer mon nom');
+    nActs.appendChild(nSave); fName.appendChild(nActs);
+    fName.appendChild(E('p', { id: 'acct-name-msg', 'class': 'tyl-msg', role: 'status', 'aria-live': 'polite' }));
+    s4.appendChild(fName); box.appendChild(s4);
+    fName.addEventListener('submit', function (ev) {
+      if (ev && ev.preventDefault) ev.preventDefault();
+      if (busy.name) return;
+      var nm = cleanName(nIn.value), n = codePoints(nm);
+      if (n < 1 || n > NAME_MAX) { say('acct-name-msg', MSG_NAME_BAD, 'err'); mark(nIn, true); return; }
+      mark(nIn, false);
+      busy.name = true; nSave.disabled = true; say('acct-name-msg', 'Enregistrement…', '');
+      Promise.resolve().then(function () { return client.rpc('set_my_display_name', { p_name: nm }); }).then(function (r) {
+        if (r && r.error) throw r.error;
+        var saved = r && typeof r.data === 'string' && r.data ? r.data : nm;
+        if (profile) profile.display_name = saved;
+        if (profCache[uid] && profCache[uid].row) profCache[uid].row.display_name = saved;
+        cur.name = saved;
+        refs['acct-name'].textContent = saved;
+        nIn.value = saved;
+        say('acct-name-msg', 'Nom enregistré.', 'ok');
+      }).then(null, function (e) {
+        e = e || { status: 0 };
+        noteErr('account.name', { code: e.code, status: e.status });
+        var c = errText(e), t;
+        if (e.code === 'PGRST202' || e.status === 404 || /could not find the function/i.test(c)) t = MSG_NAME_NO016;
+        else if (e.code === '22023' || e.status === 400) t = MSG_NAME_BAD;
+        else if (isRate(e)) t = MSG_MANY;
+        else if (isNet(e)) t = MSG_NET;
+        else t = MSG_SAVE_FAIL;
+        say('acct-name-msg', t, 'err');
+      }).then(function () { busy.name = false; nSave.disabled = false; });
+    });
+
+    // -- Session
+    var s5 = E('section', { 'aria-labelledby': 'acct-h-sess' });
+    s5.appendChild(E('h3', { id: 'acct-h-sess' }, 'Session'));
+    var forgot = E('p', { id: 'acct-forgot' }, MSG_FORGOT); shown(forgot, false); s5.appendChild(forgot);
+    var sActs = E('div', { 'class': 'tyl-actions' });
+    var outBtn = E('button', { type: 'button', 'class': 'btn' }, 'Se déconnecter');
+    var allBtn = E('button', { type: 'button', 'class': 'btn' }, 'Me déconnecter de tous les appareils');
+    sActs.appendChild(outBtn); sActs.appendChild(allBtn); s5.appendChild(sActs);
+    s5.appendChild(E('p', { id: 'acct-all-msg', 'class': 'tyl-msg', role: 'status', 'aria-live': 'polite' }));
+    var confirmBox = E('div', { 'class': 'tyl-actions' });
+    s5.appendChild(confirmBox); box.appendChild(s5);
+    outBtn.addEventListener('click', function () { outBtn.disabled = true; if (window.tylSignOut) window.tylSignOut(); });
+    function clearConfirm() { while (confirmBox.children.length) confirmBox.removeChild(confirmBox.children[0]); say('acct-all-msg', '', ''); allBtn.disabled = false; }
+    allBtn.addEventListener('click', function () {
+      if (busy.all || confirmBox.children.length) return;
+      allBtn.disabled = true;
+      say('acct-all-msg', 'Cela te déconnecte de tous tes appareils, y compris celui-ci : tu devras te reconnecter partout.', '');
+      var yes = E('button', { type: 'button', 'class': 'btn' }, 'Oui, tout déconnecter');
+      var no = E('button', { type: 'button', 'class': 'btn' }, 'Annuler');
+      no.addEventListener('click', function () { if (!busy.all) { clearConfirm(); try { allBtn.focus(); } catch (e) { /* ignoré */ } } });
+      yes.addEventListener('click', function () {
+        if (busy.all) return;
+        busy.all = true; yes.disabled = true; no.disabled = true; leaving = true;
+        stoDel('sessionStorage', GATE_KEY);
+        Promise.resolve().then(function () { return client.auth.signOut({ scope: 'global' }); }).then(function (r) {
+          if (r && r.error) throw r.error;
+          reload();
+        }).then(null, function (e) {
+          leaving = false; busy.all = false; no.disabled = false; yes.disabled = false;
+          noteErr('account.signOutAll', { code: e && e.code, status: e && e.status });
+          say('acct-all-msg', isNet(e || {}) ? MSG_NET : 'La déconnexion de tous les appareils a échoué. Réessaie.', 'err');
+        });
+      });
+      confirmBox.appendChild(yes); confirmBox.appendChild(no);
+      try { no.focus(); } catch (e) { /* ignoré */ }
+    });
+
+    root.appendChild(box);
+    closeBtn.addEventListener('click', closeAccount);
+    root.addEventListener('click', function (ev) { if (ev && ev.target === root) closeAccount(); });
+    root.addEventListener('keydown', function (ev) {
+      if (!ev) return;
+      if (ev.key === 'Escape' || ev.key === 'Esc') { if (ev.preventDefault) ev.preventDefault(); closeAccount(); return; }
+      if (ev.key !== 'Tab') return;
+      var f = [], active = document.activeElement, k;
+      for (k = 0; k < ctl.length; k++) if (!ctl[k].disabled && ctl[k].getAttribute('hidden') == null && ctl[k].getAttribute('type') !== 'hidden') f.push(ctl[k]);
+      if (!f.length) return;
+      if (ev.shiftKey && (active === f[0] || !active)) { if (ev.preventDefault) ev.preventDefault(); try { f[f.length - 1].focus(); } catch (e) { /* ignoré */ } }
+      else if (!ev.shiftKey && active === f[f.length - 1]) { if (ev.preventDefault) ev.preventDefault(); try { f[0].focus(); } catch (e) { /* ignoré */ } }
+    });
+
+    // -- Données (lecture seule), remplies au fur et à mesure
+    self.fill = function () {
+      function put(id, text) { var n = refs[id]; if (n) n.textContent = text; }
+      Promise.resolve().then(function () { return client.auth.getSession(); }).then(function (r) {
+        var u = r && r.data && r.data.session && r.data.session.user;
+        cur.email = (u && u.email) || userEmail || '';
+        put('acct-email', cur.email || 'inconnu');
+        put('acct-last', fmtDate(u && u.last_sign_in_at));
+        if (u && u.new_email) { put('acct-pending', 'En attente de confirmation : ' + u.new_email); shown(pend.dt, true); shown(pend.dd, true); }
+      }, function () { put('acct-email', userEmail || 'inconnu'); put('acct-last', 'inconnue'); });
+      profileRetry().then(function (p) {
+        var mj = isMj();
+        cur.name = p ? String(p.display_name || '') : '';
+        put('acct-role', p ? (mj ? 'MJ' : 'Joueuse') : 'inconnu');
+        put('acct-name', cur.name || '(aucun)');
+        nIn.value = cur.name;
+        shown(forgot, mj);
+        if (mj) {
+          put('acct-uid', uid || ''); shown(uidRow.dt, true); shown(uidRow.dd, true);
+          put('acct-char', 'Tous (MJ)');
+          return null;
+        }
+        return selectOne('assign', uid).then(function (row) {
+          var d = row ? rowJson(row) : null, pid = d ? (JSON.parse(d).pid || '') : '';
+          if (!pid) { put('acct-char', 'Aucun personnage attribué'); return null; }
+          return selectOne('library', String(pid)).then(function (lr) {
+            var ld = lr ? rowJson(lr) : null, nm = ld ? JSON.parse(ld).name : '';
+            put('acct-char', nm ? String(nm) : String(pid));
+          });
+        });
+      }).then(null, function (e) { noteErr('account.read', e); put('acct-char', 'Indisponible'); });
+    };
+    box.setAttribute('aria-live', 'off');
+    return self;
+  }
+
+  window.tylAccountOpen = function () {
+    if (!uid || pwdGate || !document || !document.body) return false;
+    if (acct) { focusFirst([acct.closeBtn]); return true; }
+    acct = buildAccount();
+    try { acct.opener = document.activeElement || null; } catch (e) { acct.opener = null; }
+    (document.head || document.body).appendChild(acct.style);
+    document.body.appendChild(acct.root);
+    acct.hidden = hideOthers(acct.root);
+    acct.fill();
+    focusFirst([acct.closeBtn]);
+    return true;
+  };
+
+  // =====================================================================
   // DB : documents « collection/id » dans public.docs
   // =====================================================================
   var SEG_RE = /^[A-Za-z0-9_\-.~:@+]+$/;

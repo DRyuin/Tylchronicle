@@ -4471,8 +4471,13 @@ return Promise.all([u.isOwner(), u.id ? u.id() : null]);
 if (r) { isOwner = !!r[0]; myViewer = r[1] || ''; }
 if (isOwner === false) role = 'joueur';
 if (!myViewer) { try { myViewer = localStorage.getItem('tylchronicle-vid-v1') || ''; if (!myViewer) { myViewer = uid() + uid(); localStorage.setItem('tylchronicle-vid-v1', myViewer); } } catch (e) { myViewer = uid() + uid(); } }
-applyRole(); procActs(); announce(); asgWatch(); mjHeartbeat(); signOutUi();
+applyRole(); procActs(); announce(); asgWatch(); mjHeartbeat(); signOutUi(); acctUi();
 }).catch(function () { applyRole(); });
+}
+function acctUi() {
+var ids = ['tabAcct', 'pvAcctBtn'], i;
+if (typeof window.tylSignOut !== 'function' || typeof window.tylAccountOpen !== 'function') return;
+for (i = 0; i < ids.length; i++) { (function (b) { if (!b) return; b.hidden = false; b.addEventListener('click', function () { try { var m = $('pvMenu'); if (m) m.open = false; window.tylAccountOpen(); } catch (x) { /* ignoré */ } }); })($(ids[i])); }
 }
 function signOutUi() {
 var ids = ['pvOutBtn', 'progOutBtn', 'tabOut'], i, ok = typeof window.tylSignOut === 'function';
