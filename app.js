@@ -1259,7 +1259,9 @@ key = ae.dataset.key;
 try { s0 = ae.selectionStart; s1 = ae.selectionEnd; } catch (e) { s0 = null; }
 }
 var list = sorted();
+var shO = listEl.querySelector('.sped.open'), shT = shO ? shO.scrollTop : 0;
 listEl.innerHTML = list.map(cardHTML).join('');
+if (shT) { shO = listEl.querySelector('.sped.open'); if (shO) shO.scrollTop = shT; }
 if (key) {
 var el = listEl.querySelector('[data-key="' + key + '"]');
 if (el) { el.focus(); if (s0 != null) { try { el.setSelectionRange(s0, s1); } catch (e) { /* champ numérique */ } } }
@@ -12594,7 +12596,7 @@ if (u.sc === 'class') { mx = 0; M.ents.forEach(function (en) { if (M.ents.length
 if (u.lv > mx) u.lv = -1;
 h += '<div class="chips" role="group" aria-label="Niveau"><button type="button" class="chip' + (u.lv < 0 ? ' on' : '') + '" data-sped-lv="-1" aria-pressed="' + (u.lv < 0) + '">Tous</button>';
 for (var i = 0; i <= mx; i++) h += '<button type="button" class="chip' + (u.lv === i ? ' on' : '') + '" data-sped-lv="' + i + '" aria-pressed="' + (u.lv === i) + '">' + (i === 0 ? 'Tours' : 'Niv. ' + i) + '</button>';
-h += '</div><input type="search" data-sped-q placeholder="Chercher un sort" value="' + esc(u.q) + '" aria-label="Chercher un sort"><div class="sped-l spk-list" data-sped-l></div>';
+h += '</div><input type="search" data-sped-q data-key="spedq:' + esc(id) + '" placeholder="Chercher un sort" value="' + esc(u.q) + '" aria-label="Chercher un sort"><div class="sped-l spk-list" data-sped-l></div>';
 return h + '</div>';
 }
 function spedRow(M, d, r, on, ctx) {
@@ -13414,7 +13416,7 @@ later(120);
 /* Mobile : la feuille de sorts (joueuse) se comporte en dialogue : Échap et retour arrière la ferment sans perte (= « Garder pour plus tard »), arrière-plan inerte. */
 (function () {
 function mob() { return !!(window.matchMedia && window.matchMedia('(max-width: 1023px)').matches); }
-function sheet() { return mob() ? document.querySelector('#pvSpEd .sped.open') : null; }
+function sheet() { return mob() ? document.querySelector('#pvSpEd .sped.open, #list .sped.open') : null; }
 function press(r, a) { var b = r && r.querySelector('[data-sped-a="' + a + '"]'); if (b) b.click(); }
 function bg(on) {
 ['pbar', 'pvTabs', 'pvTurnTop'].forEach(function (id) {
@@ -13422,16 +13424,25 @@ var el = document.getElementById(id);
 if (!el) return;
 if (on) el.setAttribute('inert', ''); else el.removeAttribute('inert');
 });
+var mb = document.querySelector('header.mjbar');
+if (mb) { if (on && role !== 'joueur') mb.setAttribute('inert', ''); else mb.removeAttribute('inert'); }
 }
 var pushed = false;
 function sync() {
 var r = sheet();
-if (r) { r.setAttribute('role', 'dialog'); r.setAttribute('aria-modal', 'true'); r.setAttribute('aria-label', 'Changer mes sorts'); }
+if (r) { r.setAttribute('role', 'dialog'); r.setAttribute('aria-modal', 'true'); r.setAttribute('aria-label', r.closest('#pvSpEd') ? 'Changer mes sorts' : 'Changer les sorts'); }
 bg(!!r);
 if (r && !pushed && window.history && history.pushState) { try { history.pushState({ sped: 1 }, ''); pushed = true; } catch (e) { /* ignoré */ } }
 else if (!r && pushed) { pushed = false; try { if (history.state && history.state.sped) history.back(); } catch (e2) { /* ignoré */ } }
 }
 document.addEventListener('keydown', function (ev) {
+if (ev.key === 'Escape' && mob() && role !== 'joueur') {
+var sp = document.getElementById('snPanel'), ip = document.getElementById('inspPop'), cb;
+if (!sheet()) {
+if (ip && !ip.hidden && (cb = ip.querySelector('[data-inspclose]'))) { ev.preventDefault(); cb.click(); return; }
+if (sp && !sp.hidden && (cb = document.getElementById('snClose'))) { ev.preventDefault(); cb.click(); return; }
+}
+}
 var r = ev.key === 'Escape' ? sheet() : null;
 if (!r) return;
 ev.preventDefault();
@@ -13439,6 +13450,20 @@ press(r, r.querySelector('.sped-ask:not([hidden])') ? 'keep' : 'cancel');
 });
 document.addEventListener('click', function () { setTimeout(sync, 0); });
 window.addEventListener('popstate', function () { if (!pushed) return; pushed = false; press(sheet(), 'hide'); });
+})();
+/* Barre d'onglets MJ défilante : l'onglet actif est ramené au centre de la barre (sans défiler la page). */
+(function () {
+function centre() {
+try {
+var n = document.querySelector('.mjbar > .tabs'), t = n && n.querySelector('.tab[aria-pressed="true"]');
+if (!t || n.scrollWidth <= n.clientWidth + 2) return;
+var nr = n.getBoundingClientRect(), tr = t.getBoundingClientRect();
+if (nr.width > 0) n.scrollLeft += (tr.left + tr.width / 2) - (nr.left + nr.width / 2);
+} catch (e) { /* ignoré */ }
+}
+document.addEventListener('click', function (ev) { if (ev.target && ev.target.closest && ev.target.closest('.mjbar > .tabs')) setTimeout(centre, 60); });
+window.addEventListener('resize', centre);
+setTimeout(centre, 400);
 })();
 var renderPlayer0 = uiWrap(renderPlayer);
 renderPlayer = function () { var r = renderPlayer0.apply(this, arguments); try { scrollToMine(); } catch (e) { /* ignoré */ } return r; };

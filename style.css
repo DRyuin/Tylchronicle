@@ -2113,9 +2113,9 @@ body:has(#viewPlayer.pvtabs:not([hidden])) #sndMini { bottom: calc(61px + env(sa
    Champs 16 px (pas de zoom iOS), cibles >= 44 px (min-height/min-width, pas de zoom), touch-action, tap-highlight,
    zones sûres, 100dvh, overscroll contenu. Les barres fixes qui masquent le contenu et les tableaux relèvent de D/E. */
 @media (max-width: 1023px) {
-html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; -webkit-tap-highlight-color: rgba(169, 117, 20, .12); overscroll-behavior-y: contain;
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; -webkit-tap-highlight-color: rgba(169, 117, 20, .12);
   padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
-body { overscroll-behavior-y: contain; }
+body { }
 a, button, summary, select, input, textarea, label, [role="button"], [role="tab"], .btn, .chip, .tab { touch-action: manipulation; }
 .pczoom, .sn-pan, .wzdet, #pvPanel, .mp-scroll, [role="dialog"] { overscroll-behavior: contain; }
 
@@ -2209,4 +2209,104 @@ body:has(#pvSpEd .sped.open) #cfBanner { z-index: 80; }
 body:has(#pvSpEd .sped.open) #toast { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); z-index: 80; }
 /* pendant la saisie dans la vue joueuse, le Journal flottant s'efface (il masquerait le champ et le clavier) */
 body:has(#viewPlayer :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select):focus) #jdock { display: none; }
+}
+
+/* ===== Mobile : vue MJ (étape E, 31/10/2026). Bloc borné aux écrans < 1024 px : l'ordinateur reste identique. =====
+   E1 onglets sur une ligne qui défile + barre de tour, E2 tracker à une main, E3 panneaux et picker en plein écran (100dvh, zones sûres). */
+@media (max-width: 1023px) {
+/* E1 : onglets MJ sur UNE ligne qui défile (l'onglet actif est ramené dans la vue par app.js) */
+.mjbar > .brand { padding-top: calc(8px + env(safe-area-inset-top, 0px)); }
+.mjbar > .tabs { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; scroll-snap-type: x proximity;
+  padding: 0 28px 0 16px; gap: 4px 18px; margin: 0; max-width: 100%; box-sizing: border-box;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 28px), transparent 100%); mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 28px), transparent 100%); }
+.mjbar > .tabs::-webkit-scrollbar { display: none; }
+.mjbar > .tabs > .tab { flex: 0 0 auto; white-space: nowrap; scroll-snap-align: center; font-size: .875rem; }
+.mjbar .sub, #sync { font-size: .875rem; }
+.mjbar > .bz { margin-top: 4px; }
+.mjbar > .bz .btn { padding-left: 10px; padding-right: 10px; }
+.roundbox .lbl { font-size: .875rem; letter-spacing: .06em; }
+/* Barre de tour : Annuler en icône seule sous 480 px (plus de chevauchement avec ‹ et ROUND) */
+#viewCombat { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (max-width: 480px) {
+.mjbar #undo { font-size: 0; padding: 0; min-width: 44px; }
+.mjbar #undo::before { content: "\21B6"; font-size: 1.3rem; line-height: 1; }
+.mjbar .turnctl { column-gap: 4px; }
+}
+@media (max-width: 1023px) {
+/* E2 : tracker de combat, une main : champ Montant à 44 px, textes >= 14 px (étiquettes de scène >= 12 px) */
+.card .amt:not(#_) { min-height: 44px !important; }
+.muted:not(#_) { font-size: .875rem; }
+#viewCombat .sc-name { font-size: .8rem; }
+#viewCombat .sc-hpt, #viewCombat .sc-rl { font-size: .75rem; }
+#viewCombat .sc-lbl, #viewCombat summary, #viewCombat .mini, #viewCombat .tag, #viewCombat .now-pill, #viewCombat .ecochip, #viewCombat .tksum, #viewCombat h3, #viewCombat .ph, #viewCombat .btn.sm, #list .sped .btn.sm { font-size: .875rem; }
+/* E3 : panneaux plein écran. Carnet : feuille 100dvh, titre et ✕ collés en haut, zones sûres */
+.sn-pan:not(#_) { top: 0; left: 0; right: 0; bottom: auto; width: auto; height: 100vh; max-height: none; border: 0; border-radius: 0; box-shadow: none; padding: 0 max(14px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px)); }
+.sn-pan .sn-head { position: sticky; top: 0; z-index: 2; background: var(--surface); padding: calc(10px + env(safe-area-inset-top, 0px)) 0 8px; margin: 0; border-bottom: 1px solid var(--line); }
+.sn-pan .sn-lbl, .sn-pan .hint, .sn-pan .sn-tag, .sn-pan .sn-time { font-size: .875rem; }
+.sn-pan .sn-tag, .sn-pan .sn-time { font-size: .75rem; }
+body:has(#snPanel:not([hidden])) #jdock { display: none; }
+/* Inspiration : le popover devient une feuille plein écran (le style est injecté par app.js, d'où :not(#_)) */
+#inspPop:not(#_) { top: 0; left: 0; right: 0; bottom: auto; width: auto; height: 100vh; max-height: none; border: 0; border-radius: 0; box-shadow: none; z-index: 62;
+  padding: calc(12px + env(safe-area-inset-top, 0px)) max(14px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px)); }
+#inspPop .ip-f { position: sticky; bottom: 0; background: var(--surface); padding-top: 8px; }
+#inspPop .ip-n, #inspPop .hint { font-size: .9rem; }
+body:has(#inspPop:not([hidden])) #jdock { display: none; }
+/* Panneau Joueuses, Compte : lisibles */
+#tyl-acct dd.tyl-small:not(#_) { font-size: .875rem; }
+#plist .inspb, #plist .inspb * { font-size: .75rem; }
+/* Picker de sorts du MJ (dans la carte du tracker) : feuille plein écran, comme chez les joueuses.
+   La vue Combat (z-index 1) passe devant la barre de tour (25), le mini-lecteur (30) et le Journal ; la carte redevient opaque. */
+#viewCombat:has(#list .sped.open) { z-index: 70; }
+.card:has(.sped.open):not(#_) { opacity: 1; }
+body:has(#list .sped.open) #jdock, body:has(#list .sped.open) #sndMini { display: none; }
+body:has(#list .sped.open) #cfBanner, body:has(#list .sped.open) #toast { z-index: 80; }
+body:has(#list .sped.open) #toast { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
+#list .sped.open { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 60; margin: 0; border: 0; border-radius: 0; box-sizing: border-box; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch;
+  height: 100vh; height: 100dvh; background: var(--surface); scroll-padding-bottom: 140px;
+  padding: calc(12px + env(safe-area-inset-top, 0px)) max(14px, env(safe-area-inset-right, 0px)) 0 max(14px, env(safe-area-inset-left, 0px)); }
+#list .sped.open .spk-list, #list .sped.open .sped-l { max-height: none; overflow: visible; }
+#list .sped.open .sped-foot { order: 99; position: sticky; bottom: 0; z-index: 3; display: flex; flex-direction: column; gap: 8px; margin: 8px -14px 0; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: var(--surface); border-top: 1px solid var(--line); box-shadow: 0 -6px 14px rgba(0, 0, 0, .08); }
+#list .sped.open .sped-foot > .sped-msg[hidden], #list .sped.open .sped-foot > .sped-ask[hidden] { display: none; }
+#list .sped.open .sped-btns { flex-wrap: wrap; }
+#list .sped.open .sped-btns .btn { flex: 1 1 40%; }
+#list .sped.open .sped-btns [data-sped-a="hide"] { flex-basis: 100%; }
+#list .sped .hint, #list .sped .sped-hint { font-size: .875rem; }
+#list .sped .spr-c span, #list .sped .spk-lv, #list .sped .sptile em, #list .sped .spk-ck, #list .sped .spr-d, #list .sped .sped-c, #list .sped .sped-c > *, #list .sped .chip { font-size: .75rem; }
+@media (max-height: 500px) {
+#list .sped.open { scroll-padding-bottom: 110px; }
+#list .sped.open .sped-foot { padding-top: 6px; padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px)); gap: 6px; }
+#list .sped.open .sped-btns .btn, #list .sped.open .sped-btns [data-sped-a="hide"] { flex: 1 1 0; padding-left: 8px; padding-right: 8px; }
+}
+}
+@media (max-width: 1023px) {
+@supports (height: 100dvh) {
+.sn-pan:not(#_), #inspPop:not(#_) { height: 100dvh; }
+}
+}
+/* Règles du MJ : cases à cocher dont la zone (case + libellé) fait au moins 44 px de haut (H, tests appareils) */
+@media (max-width: 1023px) {
+.rl-hri { min-height: 44px; align-items: center; }
+.rl-hri input { margin-top: 0; }
+}
+/* Notes joueuse : la recherche prend sa ligne, la liste de catégories reste utilisable (elle tombait à 23 px sur 412 px) */
+@media (max-width: 1023px) {
+#pvNotes .rowf > #pnq { flex: 1 1 100%; }
+#pvNotes .rowf > #pnc { flex: 1 1 8em; min-width: 8em; }
+}
+/* Tablette et paysage (701 à 1023 px) : même barre de tour collée en haut que sur téléphone (l'en-tête en grille de l'ordinateur défilerait avec la page) */
+@media (min-width: 701px) and (max-width: 1023px) {
+header.mjbar { display: contents; }
+header.mjbar::after { content: none; }
+.mjbar > .brand { padding-left: 16px; padding-right: 16px; }
+.mjbar > .bz { display: inline-flex; margin: 6px 0 0 16px; padding: 0; background: none; }
+.mjbar > .bz .bzl { display: none; }
+.mjbar > .bz:not(:has(> .btn:not([hidden]))) { display: none; }
+.mjbar > .turnctl { position: sticky; top: 0; z-index: 25; margin: 8px 0 0; padding: 6px 16px; border-radius: 0; gap: 4px; flex-wrap: nowrap; background: color-mix(in srgb, var(--surface) 96%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: 0 1px 0 var(--line), 0 6px 14px rgba(0, 0, 0, .08); }
+.mjbar > .turnctl::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; opacity: .8; background: linear-gradient(90deg, var(--el-feu), var(--el-eau), var(--el-vent), var(--el-terre), var(--el-tenebres), var(--el-lumiere), var(--el-vide)); }
+.mjbar > .turnctl .bzl { display: none; }
+.mjbar .turnctl .btn { padding: 0 10px; white-space: nowrap; }
+.mjbar #next { flex: 1 1 auto; min-width: 0; max-width: 320px; }
+.mjbar .roundbox { min-width: 56px; }
 }
