@@ -2147,3 +2147,66 @@ button:not(#_):not(.mp-grid *):not(.mp-tok):not(.sc-unit), [role="button"]:not(#
 @media (max-width: 560px) { .sn-pan { max-height: calc(100dvh - 16px); } }
 }
 }
+
+/* ===== Mobile : vue joueuse (étape D, 30/10/2026). Bloc borné aux écrans < 1024 px : l'ordinateur reste identique. =====
+   D1 barres fixes + lecture, D2 sorts et picker en feuille plein écran, cases à cocher, sous-onglets de la fiche. */
+.sped-foot { display: contents; }   /* pied du picker : transparent sur ordinateur */
+@media (max-width: 1023px) {
+/* Barres fixes du bas (onglets, Journal) : le contenu défile jusqu'au bout au-dessus ; le champ focalisé aussi. */
+#viewPlayer.pvtabs { padding-bottom: calc(136px + env(safe-area-inset-bottom, 0px)); }
+html:has(#viewPlayer.pvtabs:not([hidden])) { scroll-padding-bottom: calc(136px + env(safe-area-inset-bottom, 0px)); }
+
+/* Texte de lecture : 14 px minimum ; étiquettes courtes (pastilles, jetons) : 12 px minimum. */
+#viewPlayer .hint, #viewPlayer .shv > span, #viewPlayer .shabc > span, #viewPlayer .shabc > i,
+#viewPlayer .tkl .tkv, #viewPlayer details.tkadd > summary, #viewPlayer .pvmore-s, #viewPlayer .cnt2 > span,
+#viewPlayer .sped-c, #viewPlayer .sped-c > *, #viewPlayer .chip, #viewPlayer .spk-tools .btn, #viewPlayer .spr-d,
+#viewPlayer .mcrow > label, #viewPlayer #pvEdit label, #viewPlayer .shstat span, #viewPlayer .shmg span, #viewPlayer .shbox .hint, #pvMenu .sub, #viewPlayer .shw > span, #viewPlayer .inspr .hint, #viewPlayer .sumbox label, #viewPlayer label.rowf, #viewPlayer details.tkadd label { font-size: .875rem; }
+#viewPlayer .spr-c span, #viewPlayer .spk-lv, #viewPlayer .sptile em, #viewPlayer .sc-hpt, #viewPlayer .sc-rl, #viewPlayer .spk-ck { font-size: .75rem; }
+#viewPlayer #pvEdit label[style*="font-size"] { font-size: .875rem !important; }   /* style en ligne dans le markup */
+#viewPlayer .spr-c span { line-height: 1.15; padding: 3px 7px; }
+
+/* Cases à cocher et boutons radio : toute la ligne du libellé est la zone d'appui (>= 44 px), la case garde sa taille. */
+#viewPlayer label:has(> input[type="checkbox"]), #viewPlayer label:has(> input[type="radio"]),
+#viewPlayer [role="dialog"] label:has(> input[type="checkbox"]), #viewPlayer [role="dialog"] label:has(> input[type="radio"]) { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+
+/* Écran de connexion : la ligne « Rester connecté » entière est la zone d'appui. */
+#tyl-login .tyl-keep label[for] { flex: 1 1 auto; display: flex; align-items: center; min-height: 44px; }
+
+/* Sous-onglets de la fiche : une seule ligne qui défile (au lieu de 3 lignes de pastilles qui poussent le contenu). */
+.pvftabs { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; scrollbar-width: none; margin: -2px -2px; padding: 4px 2px; }
+.pvftabs::-webkit-scrollbar { display: none; }
+.pvftabs > button { scroll-snap-align: center; }
+
+/* Picker de sorts : feuille plein écran, boutons Enregistrer / Annuler collés en bas (zone du pouce). */
+#pvSpEd .sped.open { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 60; margin: 0; border: 0; border-radius: 0; box-sizing: border-box; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; scroll-padding-bottom: 140px;
+  background: var(--surface); padding: calc(12px + env(safe-area-inset-top, 0px)) max(14px, env(safe-area-inset-right, 0px)) 0 max(14px, env(safe-area-inset-left, 0px)); }
+#pvSpEd .sped.open .spk-list, #pvSpEd .sped.open .sped-l { max-height: none; overflow: visible; }
+#pvSpEd .sped.open .sped-foot { order: 99; position: sticky; bottom: 0; z-index: 3; display: flex; flex-direction: column; gap: 8px; margin: 8px -14px 0; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: var(--surface); border-top: 1px solid var(--line); box-shadow: 0 -6px 14px rgba(0, 0, 0, .08); }
+#pvSpEd .sped.open .sped-foot > .sped-msg[hidden], #pvSpEd .sped.open .sped-foot > .sped-ask[hidden] { display: none; }
+#pvSpEd .sped.open .sped-btns { flex-wrap: wrap; }
+#pvSpEd .sped.open .sped-btns .btn { flex: 1 1 40%; }
+#pvSpEd .sped.open .sped-btns [data-sped-a="hide"] { flex-basis: 100%; }
+@media (max-height: 500px) {   /* paysage : les trois boutons sur une ligne, pied plus bas */
+#pvSpEd .sped.open { scroll-padding-bottom: 110px; }
+#pvSpEd .sped.open .sped-foot { padding-top: 6px; padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px)); gap: 6px; }
+#pvSpEd .sped.open .sped-btns .btn, #pvSpEd .sped.open .sped-btns [data-sped-a="hide"] { flex: 1 1 0; padding-left: 8px; padding-right: 8px; }
+/* paysage : la scène de combat passe avant la bannière et la carte de PV (au-dessus de la ligne de flottaison) */
+#viewPlayer.pvtabs:not(.pvedit) #pvMain.pvgrid > #pvScene { order: -70; }
+#viewPlayer:not(.pvedit) #pvMain.two .turnbanner { order: -75; }
+/* paysage : bandeau de tour et barre d'onglets plus bas (ils restent collés en haut) */
+.pv .turnbanner, .pv .turnbanner.me { padding: 6px 14px; font-size: 1.05rem; }
+.pv .turnbanner.me::before { font-size: 1.15rem; }
+#viewPlayer > .pvtabs-bar > button { min-height: 44px; padding-top: 2px; padding-bottom: 2px; }
+header#pbar.bar { padding-top: 4px; padding-bottom: 4px; }
+#viewPlayer.pv.wrap { padding-top: 8px; row-gap: 8px; }
+}
+/* la feuille sort des contextes d'empilement de #pvMain et #viewPlayer (z-index 1) pour passer devant l'en-tête et la barre d'onglets */
+#viewPlayer:has(#pvSpEd .sped.open) { z-index: 70; }
+#pvMain:has(#pvSpEd .sped.open) { z-index: 60; }
+body:has(#pvSpEd .sped.open) #jdock { display: none; }
+body:has(#pvSpEd .sped.open) #cfBanner { z-index: 80; }
+body:has(#pvSpEd .sped.open) #toast { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); z-index: 80; }
+/* pendant la saisie dans la vue joueuse, le Journal flottant s'efface (il masquerait le champ et le clavier) */
+body:has(#viewPlayer :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select):focus) #jdock { display: none; }
+}

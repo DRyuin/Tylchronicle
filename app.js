@@ -8821,7 +8821,7 @@ var PVT_LS = 'tylchronicle-pvtab165', PVT_IDS = ['jouer', 'fiche', 'sorts', 'his
 var PVT_LBL = { jouer: 'Jouer', fiche: 'Ma fiche', sorts: 'Sorts & objets', histoire: 'Histoire' };
 var PVT_DEF = { pvTrack: 'jouer', pvActions: 'jouer', pvEditBox: 'fiche', pvShId: 'fiche', pvShAb: 'fiche', pvShLg: 'fiche', pvShPe: 'fiche', pvShEq: 'fiche', pvShBio: 'fiche', pvShMg: 'fiche', pvSpellBox: 'sorts', pvMiBox: 'sorts', pvDiceBox: 'histoire', pvStoryBox: 'histoire', pvMapBox: 'histoire', pvNotesBox: 'histoire' };
 var PVT_SUB = [['id', 'Identité et combat', ['pvEditBox', 'pvShId', 'pvShAb']], ['lg', 'Maîtrises et langues', ['pvShLg']], ['pe', 'Personnalité', ['pvShPe']], ['eq', 'Équipement', ['pvShEq']], ['bio', 'Apparence et histoire', ['pvShBio']], ['mg', 'Magie', ['pvShMg']]];
-var pvt = { t: 'jouer', f: 'id', o: 0 }, pvtMoreOpen = false, pvtTrkOpen = false, pvtSubSig = '';
+var pvt = { t: 'jouer', f: 'id', o: 0 }, pvtMoreOpen = false, pvtTrkOpen = false, pvtSubSig = '', pvtSubLast = '';
 (function () {
 var o = null;
 try { o = JSON.parse(localStorage.getItem(PVT_LS) || 'null'); } catch (e) { o = null; }
@@ -8882,7 +8882,8 @@ var many = vis.length > 1;
 bar.hidden = !on || !many;
 var sig = vis.map(function (x) { return x[0]; }).join(',');
 if (sig !== pvtSubSig) { pvtSubSig = sig; bar.innerHTML = vis.map(function (x) { return '<button type="button" role="tab" id="pvSub-' + x[0] + '" data-pvsub="' + x[0] + '" aria-controls="pvMain">' + esc(x[1]) + '</button>'; }).join(''); }
-Array.prototype.forEach.call(bar.children, function (b) { var sel = b.getAttribute('data-pvsub') === pvt.f; b.setAttribute('aria-selected', sel ? 'true' : 'false'); b.tabIndex = sel ? 0 : -1; });
+Array.prototype.forEach.call(bar.children, function (b) { var sel = b.getAttribute('data-pvsub') === pvt.f; b.setAttribute('aria-selected', sel ? 'true' : 'false'); b.tabIndex = sel ? 0 : -1; if (sel && pvtSubLast !== pvt.f && !bar.hidden && bar.scrollWidth > bar.clientWidth + 2) { try { var want = Math.max(0, Math.round(b.offsetLeft - (bar.clientWidth - b.offsetWidth) / 2)); if (Math.abs(bar.scrollLeft - want) > 4) bar.scrollLeft = want; } catch (er) { /* ignoré */ } } });
+pvtSubLast = bar.clientWidth > 0 ? pvt.f : '';
 PVL_SECS.forEach(function (d) {
 var el = $(d[0]), sb = pvtSubOf(d[0]);
 if (el) el.classList.toggle('pvsub-off', on && many && !!sb && pvtTabOf(d[0]) === 'fiche' && sb !== pvt.f);
@@ -12580,9 +12581,9 @@ return h + '<div class="sped-cnt sped-ro">' + spedCntHTML(M, null, you) + '</div
 }
 h += '<div class="sped-hd"><h3 tabindex="-1">🔄 Changer ' + who + '</h3><span class="sped-dirty"' + (df.length ? '' : ' hidden') + '>Modifications non enregistrées</span></div>' +
 '<p class="hint sped-hint">Brouillon : coche et décoche librement, rien n\'est enregistré avant « 💾 Enregistrer ».</p>' +
-'<div class="sped-cnt" aria-live="polite">' + spedCntHTML(M, d, you) + '</div><div class="sped-diff">' + spedDiffHTML(df) + '</div>' + msg +
+'<div class="sped-cnt" aria-live="polite">' + spedCntHTML(M, d, you) + '</div><div class="sped-diff">' + spedDiffHTML(df) + '</div><div class="sped-foot">' + msg +
 '<div class="sped-ask" role="alertdialog" aria-label="Jeter le brouillon"' + (u.ask ? '' : ' hidden') + '>' + (u.ask ? spedAskHTML(df) : '') + '</div>' +
-'<div class="sped-btns"><button type="button" class="btn primary" data-sped-a="save"' + (df.length ? '' : ' disabled') + '>💾 Enregistrer</button><button type="button" class="btn" data-sped-a="cancel">Annuler</button><button type="button" class="btn sm" data-sped-a="hide">Garder pour plus tard</button></div>';
+'<div class="sped-btns"><button type="button" class="btn primary" data-sped-a="save"' + (df.length ? '' : ' disabled') + '>💾 Enregistrer</button><button type="button" class="btn" data-sped-a="cancel">Annuler</button><button type="button" class="btn sm" data-sped-a="hide">Garder pour plus tard</button></div></div>';
 var scs = (M.ents.length ? [['class', 'Ma liste de classe']] : []).concat([['mine', you ? 'Mes sorts' : 'Ses sorts'], ['other', 'Autres listes']]);
 if (!scs.some(function (x) { return x[0] === u.sc; })) u.sc = scs[0][0];
 if (M.ents.length && !M.ents.some(function (en) { return en.n === u.cl; })) u.cl = M.ents[0].n;
@@ -13389,6 +13390,56 @@ scKey = key;
 var r = t.getBoundingClientRect(), r0 = sc.getBoundingClientRect();
 sc.scrollLeft += (r.left + r.width / 2) - (r0.left + r0.width / 2);
 }
+/* Mobile : le champ qui a le focus reste visible (clavier virtuel, barres fixes du bas). Aucun effet sur ordinateur. */
+(function () {
+function keep() {
+try {
+if (!window.matchMedia || !window.matchMedia('(max-width: 1023px)').matches) return;
+var a = document.activeElement;
+if (!a || !/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.type === 'checkbox' || a.type === 'radio') return;
+var r = a.getBoundingClientRect(), vv = window.visualViewport, vt = vv ? vv.offsetTop : 0, h = vv ? vv.height : window.innerHeight, bar = $('pvTabs'), bt = vt + h;
+if (bar && !bar.hidden && getComputedStyle(bar).position === 'fixed') bt = Math.min(bt, bar.getBoundingClientRect().top);
+if (r.bottom > bt - 8 || r.top < vt + 8) a.scrollIntoView({ block: 'center' });
+} catch (e) { /* ignoré */ }
+}
+var kT = 0, kH = window.visualViewport ? window.visualViewport.height : 0;
+function later(ms) { clearTimeout(kT); kT = setTimeout(keep, ms); }
+document.addEventListener('focusin', function () { later(350); });
+if (window.visualViewport) window.visualViewport.addEventListener('resize', function () {
+var vv = window.visualViewport, shrink = vv.height < kH - 40; kH = vv.height;
+if (vv.scale > 1.01 || !shrink) return;   /* seulement l'ouverture du clavier, jamais le zoom */
+later(120);
+});
+})();
+/* Mobile : la feuille de sorts (joueuse) se comporte en dialogue : Échap et retour arrière la ferment sans perte (= « Garder pour plus tard »), arrière-plan inerte. */
+(function () {
+function mob() { return !!(window.matchMedia && window.matchMedia('(max-width: 1023px)').matches); }
+function sheet() { return mob() ? document.querySelector('#pvSpEd .sped.open') : null; }
+function press(r, a) { var b = r && r.querySelector('[data-sped-a="' + a + '"]'); if (b) b.click(); }
+function bg(on) {
+['pbar', 'pvTabs', 'pvTurnTop'].forEach(function (id) {
+var el = document.getElementById(id);
+if (!el) return;
+if (on) el.setAttribute('inert', ''); else el.removeAttribute('inert');
+});
+}
+var pushed = false;
+function sync() {
+var r = sheet();
+if (r) { r.setAttribute('role', 'dialog'); r.setAttribute('aria-modal', 'true'); r.setAttribute('aria-label', 'Changer mes sorts'); }
+bg(!!r);
+if (r && !pushed && window.history && history.pushState) { try { history.pushState({ sped: 1 }, ''); pushed = true; } catch (e) { /* ignoré */ } }
+else if (!r && pushed) { pushed = false; try { if (history.state && history.state.sped) history.back(); } catch (e2) { /* ignoré */ } }
+}
+document.addEventListener('keydown', function (ev) {
+var r = ev.key === 'Escape' ? sheet() : null;
+if (!r) return;
+ev.preventDefault();
+press(r, r.querySelector('.sped-ask:not([hidden])') ? 'keep' : 'cancel');
+});
+document.addEventListener('click', function () { setTimeout(sync, 0); });
+window.addEventListener('popstate', function () { if (!pushed) return; pushed = false; press(sheet(), 'hide'); });
+})();
 var renderPlayer0 = uiWrap(renderPlayer);
 renderPlayer = function () { var r = renderPlayer0.apply(this, arguments); try { scrollToMine(); } catch (e) { /* ignoré */ } return r; };
 render = uiWrap(render); renderMjScene = uiWrap(renderMjScene); renderEd = uiWrap(renderEd);
