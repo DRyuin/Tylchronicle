@@ -4473,8 +4473,29 @@ return Promise.all([u.isOwner(), u.id ? u.id() : null]);
 if (r) { isOwner = !!r[0]; myViewer = r[1] || ''; }
 if (isOwner === false) role = 'joueur';
 if (!myViewer) { try { myViewer = localStorage.getItem('tylchronicle-vid-v1') || ''; if (!myViewer) { myViewer = uid() + uid(); localStorage.setItem('tylchronicle-vid-v1', myViewer); } } catch (e) { myViewer = uid() + uid(); } }
-applyRole(); procActs(); announce(); asgWatch(); mjHeartbeat(); signOutUi(); acctUi();
+applyRole(); procActs(); announce(); asgWatch(); mjHeartbeat(); signOutUi(); acctUi(); boardUi(); boardPlayerUi();
 }).catch(function () { applyRole(); });
+}
+function boardLoad(src, cb) {
+var k = 'data-bl-' + src.replace(/\W/g, '');
+if (document.documentElement.getAttribute(k)) return;
+document.documentElement.setAttribute(k, '1');
+var sc = document.createElement('script');
+sc.src = src; sc.onload = cb; sc.onerror = function () { document.documentElement.removeAttribute(k); };
+document.head.appendChild(sc);
+}
+function boardUi() {
+var b = $('boardBtn');
+if (!b || isOwner === false) return;
+if (window.TYL_CONFIG && window.TYL_CONFIG.board === false) return;
+if (!window.tylBoard) { boardLoad('tableau.js', boardUi); return; }
+if (!b.getAttribute('data-w')) { b.setAttribute('data-w', '1'); b.addEventListener('click', function () { window.tylBoard.open(b); }); }
+window.tylBoard.refreshButton();
+}
+function boardPlayerUi() {
+if (isOwner !== false || !$('pvBoardBtn')) return;
+if (!window.tylBoardPlayer) { boardLoad('tableau-joueuse.js', boardPlayerUi); return; }
+window.tylBoardPlayer.init();
 }
 function acctUi() {
 var ids = ['tabAcct', 'pvAcctBtn'], i;

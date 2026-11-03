@@ -1,0 +1,42 @@
+/* tableau.css : styles du tableau blanc (côté MJ), chargé à la demande par tableau.js. Jetons de la charte (var(--...)), thèmes clair/sombre. */
+#tbOv{position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;height:100vh;height:100dvh;box-sizing:border-box;background:var(--bg);color:var(--ink);padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);overscroll-behavior:contain}
+#tbOv[hidden]{display:none}
+html.tb-lock,html.tb-lock body{overflow:hidden}
+#tbOv .tb-top,#tbOv .tb-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 8px;background:var(--surface)}
+#tbOv .tb-top{border-bottom:1px solid var(--line)}
+#tbOv .tb-bar{border-top:1px solid var(--line);flex-direction:column;align-items:stretch;flex-wrap:nowrap;gap:4px}
+#tbOv .tb-name{font-weight:700;flex:1 1 80px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}
+#tbOv .tb-status{font-size:14px;color:var(--muted)}
+#tbOv .tb-btn{box-sizing:border-box;min-width:44px;min-height:44px;padding:0 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);color:var(--ink);font:inherit;font-size:15px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:4px;touch-action:manipulation}
+#tbOv .tb-btn:disabled{opacity:.45;cursor:default}
+#tbOv .tb-btn[aria-pressed="true"],#tbOv .tb-primary{background:var(--primary);border-color:var(--primary);color:var(--on-primary);font-weight:700}
+#tbOv .tb-sw{padding:0}
+#tbOv .tb-sw i{display:block;width:26px;height:26px;border-radius:50%;border:2px solid var(--line)}
+#tbOv .tb-sw[aria-pressed="true"]{background:var(--brass-soft);border-color:var(--brass)}
+#tbOv .tb-sw[aria-pressed="true"] i{border-color:var(--ink)}
+#tbOv .tb-row{display:flex;flex-wrap:nowrap;gap:6px;width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:thin;box-sizing:border-box}
+#tbOv .tb-row:before,#tbOv .tb-row:after{content:"";margin:auto}
+#tbOv .tb-row>*{flex:0 0 auto}
+#tbOv .tb-row[hidden],#tbOv [hidden]{display:none}
+#tbOv .tb-stage{position:relative;flex:1 1 auto;min-height:0;overflow:hidden;background:var(--surface-2);touch-action:none;-webkit-user-select:none;user-select:none}
+#tbOv .tb-stage canvas{position:absolute;left:0;top:0;width:100%;height:100%;transform-origin:0 0}
+#tbOv .tb-msg{margin:0;padding:2px 10px;min-height:20px;font-size:14px;color:var(--ink);text-align:center}
+#tbOv .tb-msg.err{color:var(--brass-ink);font-weight:700}
+#tbOv :focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+#tbOv .tb-in{box-sizing:border-box;height:44px;min-width:0;padding:0 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;font-size:16px}
+#tbOv .tb-grp{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+#tbOv .tb-lab{font-size:14px;color:var(--muted);white-space:nowrap}
+#tbOv .tb-out{font-size:15px;font-weight:700;white-space:nowrap}
+#tbOv .tb-panel{position:absolute;left:8px;right:8px;z-index:5;max-height:calc(100% - 150px);overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;box-shadow:0 4px 18px rgba(0,0,0,.25)}
+#tbOv .tb-panel ul{list-style:none;margin:0 0 8px;padding:0;display:flex;flex-direction:column;gap:6px}
+#tbOv .tb-sel{width:100%;justify-content:flex-start;text-align:left}
+#tbOv .tb-prow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0}
+#tbOv .tb-prow label{font-size:14px}
+#tbOv .tb-lib{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px;margin:6px 0}
+#tbOv .tb-lib .tb-btn{flex-direction:column;height:auto;padding:6px;font-size:14px;overflow-wrap:anywhere}
+#tbOv .tb-lib img{width:64px;height:64px;object-fit:cover;border-radius:8px;display:block}
+#tbOv .tb-panel h2{margin:0 0 6px;font-size:16px}
+#tbStage:focus{outline:none}#tbStage:focus-visible{outline:3px solid var(--brass);outline-offset:-3px}
+#tbOv .tb-down{display:flex;justify-content:center;padding:12px}#tbOv .tb-down[hidden]{display:none}
+#tbOv.tb-down-on .tb-stage,#tbOv.tb-down-on .tb-bar,#tbOv.tb-down-on #tbShow{display:none}
+#tbOv.tb-down-on #tbMsg{padding:24px 16px;font-size:16px;min-height:0}

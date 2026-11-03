@@ -35,6 +35,7 @@
   <div class="bz bz-t" role="group" aria-label="Outils"><span class="bzl" aria-hidden="true">Outils</span>
   <button class="btn" id="snBtn" type="button" aria-expanded="false" aria-controls="snPanel" title="Carnet de séance : notes, bilan des combats, résumé">📓 Carnet<span class="sn-badge" id="snBadge"></span></button>
   <button class="btn" id="inspBtn" type="button" aria-expanded="false" aria-controls="inspPop" title="Donner des points d'inspiration">✦ Inspiration</button>
+  <button class="btn" id="boardBtn" type="button" hidden aria-haspopup="dialog" title="Tableau partagé : montrer une image ou dessiner pour les joueuses">🖼 Tableau</button>
   </div>
   <div class="bz bz-v" role="group" aria-label="Vues"><span class="bzl" aria-hidden="true">Vues</span>
   <button class="btn" id="toPlayer" type="button" title="Voir la page comme une joueuse">👁 Vue joueuse</button>
@@ -60,6 +61,7 @@
   <button class="btn" id="pvEditBtn" type="button" hidden aria-pressed="false" title="Déplacer les blocs, choisir leur onglet, couleur, taille et colonnes">🎛 Aménager</button>
   <button class="btn" id="pvRulesBtn" type="button" title="Règles de la table">📖 Règles</button>
   <button class="btn" id="pvProgBtn" type="button" aria-haspopup="dialog" aria-controls="clpOv" title="Tableau de progression de chaque classe, niveaux 1 à 20">📈 Progression</button>
+  <button class="btn" id="pvBoardBtn" type="button" hidden aria-haspopup="dialog" title="Voir le tableau que le MJ montre">🖼 Tableau</button>
   <button class="btn" id="pvSndBtn" type="button" aria-expanded="false" aria-controls="pvSndPop" title="Musique et effets sonores">🎵 Musique</button>
   <button class="btn" id="pchange" type="button" hidden>Changer de personnage</button>
   <button class="btn" id="pvAcctBtn" type="button" hidden aria-haspopup="dialog" title="Mon compte : e-mail, mot de passe, nom affiché">Mon compte</button>
@@ -456,6 +458,7 @@
 <script src="shim-assets.js"></script>
 <script src="data.js"></script>
 <script src="app.js"></script>
+<script src="tableau-modele.js"></script>
 
 <script src="extra.js"></script>
 <script src="protege-import.js"></script>
