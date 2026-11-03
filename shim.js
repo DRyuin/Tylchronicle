@@ -354,6 +354,7 @@
         authSync();
         Object.keys(cols).forEach(function (k) { refresh(cols[k]); });
         if (roomNs && roomNs.__resume) roomNs.__resume();
+        Object.keys(boardNs).forEach(function (k) { if (boardNs[k] && boardNs[k].__resume) boardNs[k].__resume(); });
       }
       return;
     }
@@ -1868,6 +1869,10 @@
   // ROOM : canal Broadcast 'tyl-room'
   // =====================================================================
   var roomNs = null, roomState = { up: false, status: 'idle', sent: 0, received: 0 };
+  // Canaux privés du tableau blanc (migration 017) : LISTE FIXE de noms, même
+  // logique que tyl-room (jeton, reprise, refus) ; jamais d'accès au client brut.
+  var BOARD_CHANNELS = { board: 'tyl-board', boardPing: 'tyl-board-ping' };
+  var boardNs = {}, boardState = {};
   var TOPIC_RE = /^[a-z][a-z0-9_.-]{0,47}$/;
 
   function roomErr(code, message) { var e = dbErr(code, message); return e; }
@@ -1883,7 +1888,7 @@
   // PAS authentifié par Realtime : une joueuse peut le falsifier. Il ne sert
   // donc qu'à l'affichage et au filtrage d'échos ; aucune décision de
   // sécurité n'en dépend (les actions passent par la base : audit E2).
-  function makeRoom() {
+  function makeRoom(chName, roomState) {
     var peer = randomId(16).toLowerCase();
     var listeners = {}; // topic -> [{h, active}]
     var connL = [];
@@ -1939,7 +1944,7 @@
       stopped = false; nErr = 0;
       var c;
       try {
-        c = ch = client.channel('tyl-room', { config: { private: true, broadcast: { self: false } } });
+        c = ch = client.channel(chName, { config: { private: true, broadcast: { self: false } } });
         c.on('broadcast', { event: 'tyl' }, function (m) {
           var p = m && m.payload;
           if (!p || typeof p.topic !== 'string' || !TOPIC_RE.test(p.topic)) return;
@@ -2046,8 +2051,16 @@
       case 'db': return dbNs;
       case 'user': return userNs;
       case 'room':
-        if (!roomNs) roomNs = makeRoom();
+        if (!roomNs) roomNs = makeRoom('tyl-room', roomState);
         return roomNs;
+      case 'board':
+      case 'boardPing':
+        if (!Object.prototype.hasOwnProperty.call(BOARD_CHANNELS, name)) return null;
+        if (!boardNs[name]) {
+          boardState[name] = { up: false, status: 'idle', sent: 0, received: 0 };
+          boardNs[name] = makeRoom(BOARD_CHANNELS[name], boardState[name]);
+        }
+        return boardNs[name];
       case 'assets':
         // Comme la plateforme : null pour qui ne peut pas éditer (revue M11).
         return profileRetry().then(function () {
@@ -2061,7 +2074,7 @@
   }
   function use(name) {
     name = String(name);
-    if (name !== 'db' && name !== 'user' && name !== 'room' && name !== 'assets') {
+    if (name !== 'db' && name !== 'user' && name !== 'room' && name !== 'assets' && name !== 'board' && name !== 'boardPing') {
       // Inconnu ou désactivé : null, sans attendre la connexion.
       return Promise.resolve(null);
     }
@@ -2083,6 +2096,7 @@
       role: profile ? profile.role : null, name: profile ? profile.display_name : null,
       subscriptions: nSubs, channels: chans,
       room: roomNs ? { connected: roomState.up, status: roomState.status, sent: roomState.sent, received: roomState.received } : null,
+      boards: Object.keys(boardState).reduce(function (o, k) { o[k] = { connected: boardState[k].up, status: boardState[k].status, sent: boardState[k].sent, received: boardState[k].received }; return o; }, {}),
       rev: HAS_REV, pendingEchoes: recent.length, writeQueues: Object.keys(queues).length,
       stats: JSON.parse(JSON.stringify(stats)), lastErrors: lastErrors.slice()
     };
