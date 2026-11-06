@@ -1,0 +1,59 @@
+/* combat-simple.css : mode « Combat simplifié » (tranches T1 et T2). Charte inchangée (variables de style.css).
+   Tout est conditionné par body.cs-simple ou par les éléments créés par combat-simple.js : en mode Complet
+   rien de ce fichier ne s'applique (les éléments ajoutés restent hidden) => rendu ordinateur identique. */
+
+/* ---- masquage réversible (le drapeau central met/retire body.cs-simple) ---- */
+body.cs-simple #mjSceneBox,
+body.cs-simple #mjEdBox,
+body.cs-simple #pvScene { display: none !important; }
+
+/* le journal du MJ (PV exacts des ennemis) n'est jamais montré aux joueuses en Simplifié (H6) */
+body.cs-simple:not(.cs-mj) #jdock { display: none !important; }
+
+/* ---- carte de combattant réduite à l'essentiel : en-tête, PV, dégâts/soin/PV temp., états, outils ---- */
+body.cs-simple #list .card .body > :not(.head):not(.hpline):not(.dmg):not(.death):not(.chips):not(.notes):not(.tools):not(.editgrid) { display: none; }
+body.cs-simple #list .card .tools [data-act="acts"],
+body.cs-simple #list .card .tools [data-act="sheet"],
+body.cs-simple #list .card .tools [data-act="sum"] { display: none; }
+body.cs-simple #list .card.cs-hid { opacity: .78; border-left-style: dashed; }
+body.cs-simple #list .card .cs-tag { background: var(--surface-2); color: var(--muted); border: 1px dashed var(--muted); }
+body.cs-simple #list .card .cs-hidbtn[aria-pressed="true"] { background: var(--brass-soft); border-color: var(--brass); color: var(--brass-ink); }
+
+/* ---- bandeau « au tour de » réduit ---- */
+.cs-now { padding: 4px 2px; font-size: 1.05rem; }
+.cs-now .cs-round { font-family: var(--font-display); font-weight: 700; letter-spacing: .04em; margin-right: 6px; }
+.cs-now .chips { margin-top: 6px; }
+
+/* ---- ajout rapide ---- */
+.cs-quick { margin: 0 0 12px; padding: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--soft); }
+.cs-quick[hidden], #csNextBar[hidden], .cs-quick [hidden] { display: none !important; }
+.cs-quick .cs-row { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin-top: 8px; }
+.cs-quick .cs-row:first-child { margin-top: 0; }
+.cs-quick input[type=search], .cs-quick input[type=number] { min-height: 48px; font-size: 1rem; padding: 6px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); width: 100%; }
+.cs-quick .cs-qty, .cs-quick .cs-free label { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.cs-quick .cs-qty input, .cs-quick .cs-free input { width: 84px; text-align: center; }
+.cs-quick .cs-qty span, .cs-quick .cs-free label span { font-size: .95rem; color: var(--muted); }
+.cs-quick .cs-chk { display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); cursor: pointer; }
+.cs-quick .cs-chk input { width: 22px; height: 22px; margin: 0; accent-color: var(--primary); }
+.cs-quick .btn { min-height: 48px; font-size: 1rem; }
+.cs-quick .cs-add { flex: 1 1 120px; }
+.cs-quick .cs-hint { flex: 1 1 100%; font-size: .9rem; color: var(--muted); align-self: center; }
+.cs-sug, .cs-rec { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.cs-sug:empty { display: none; }
+.cs-sug .cs-s { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; padding: 4px 12px; text-align: left; line-height: 1.2; min-width: 44%; flex: 1 1 44%; }
+.cs-sug .cs-s span { font-size: .9rem; color: var(--muted); }
+.cs-rec .cs-r { padding: 0 14px; background: var(--brass-soft); border-color: var(--brass); color: var(--brass-ink); }
+.cs-quick .cs-act .btn { flex: 1 1 30%; }
+.cs-quick #csNew.armed { background: var(--bad); border-color: var(--bad); color: #fff; }
+
+/* ---- gros bouton « Tour suivant » au pouce (téléphone et tablette) ---- */
+#csNextBar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 38; padding: 8px max(12px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); background: color-mix(in srgb, var(--surface) 94%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border-top: 1px solid var(--line); }
+#csNextBar #csNext { width: 100%; min-height: 56px; font-size: 1.15rem; border-radius: 14px; }
+@media (min-width: 1024px) { #csNextBar { display: none !important; } }
+@media (max-width: 1023px) {
+  body.cs-simple.cs-mj #viewCombat:not([hidden]) { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+  body.cs-simple.cs-mj:has(#csNextBar:not([hidden])) #jdock { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+  body.cs-simple.cs-mj:has(#csNextBar:not([hidden])) #toast { bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
+  body.cs-simple.cs-mj .turnctl #next { display: none; }
+}
+@media (max-width: 560px) { .cs-quick .cs-act .btn { flex: 1 1 100%; } }

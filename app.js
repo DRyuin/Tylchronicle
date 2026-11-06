@@ -33,6 +33,11 @@ var IMG_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/;
 var PENCIL = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>';
 
 var S = { round: 1, activeId: null, example: false, env: '', map: null, won: null, fx: { n: 0, k: '', src: '', dst: '', v: 0, txt: '', cap: '' }, oa: [], combatants: [], log: [] };
+/* Combat simplifié : drapeau central (combat-simple.js). Mode absent = Simplifié (H9) une fois l'état chargé ; avant le chargement, ou sans combat-simple.js : comportement d'avant (Complet). */
+function simple() { return loaded && !!(window.tylCS && window.tylCS.simple(S)); }
+function csKeepMode(m) { if (m) S.mode = m; else delete S.mode; }
+function csPre() { try { document.body.classList.toggle('cs-simple', simple()); } catch (e) { /* ignoré */ } }
+function csPost() { try { if (window.tylCS && window.tylCS.sync) window.tylCS.sync(); } catch (e) { /* ignoré */ } try { if (window.tylPJ && window.tylPJ.sync) window.tylPJ.sync(); } catch (e) { /* ignoré */ } try { if (window.tylTK && window.tylTK.sync) window.tylTK.sync(); } catch (e) { /* ignoré */ } }
 var lib = [];
 var libCol = null;
 var libLoaded = false;
@@ -47,6 +52,9 @@ var syncState = 'loading';
 var dice = [];
 var docRef = null;
 var lastSer = '';
+/* Combat simplifié côté joueuse (non-propriétaire) : S est construit depuis combatview/live, ou depuis combat/state lavé (csRaw = dernier état brut reçu, csRawAt = son updatedAt).
+   csLave = S est une version lavée : jamais réécrite dans combat/state. Le MJ (isOwner === true) n'est jamais lavé, même en « Vue joueuse » (C1). */
+var csRaw = null, csRawAt = 0, csLave = false;
 var dbTimer = null, dbBusy = false, dbDirty = false;
 var localState = null;
 var form = null;
@@ -303,6 +311,7 @@ return out;
 function strList(a) { return (Array.isArray(a) ? a : []).filter(function (k) { return /^\d{1,2},\d{1,2}$/.test(String(k)); }).map(String).slice(0, 1200); }
 function normalize(st) {
 var out = { round: Math.max(1, int(st.round, 1)), activeId: st.activeId || null, example: !!st.example, map: normalizeMap(st.map), done: Array.isArray(st.done) ? st.done.map(function (x) { return String(x).slice(0, 40); }).slice(0, 40) : [], won: st.won && st.won.n ? { n: int(st.won.n, 0), r: int(st.won.r, 1) } : null, env: /^[a-z]{3,12}$/.test(String(st.env || '')) ? String(st.env) : '', fx: st.fx && typeof st.fx === 'object' ? { n: int(st.fx.n, 0), k: String(st.fx.k || '').slice(0, 8), src: String(st.fx.src || '').slice(0, 40), dst: String(st.fx.dst || '').slice(0, 40), v: int(st.fx.v, 0), txt: String(st.fx.txt || '').slice(0, 160), cap: String(st.fx.cap || '').slice(0, 40) } : { n: 0, k: '', src: '', dst: '', v: 0, txt: '' }, gap: st.gap ? 1 : 0, gapN: String(st.gapN || '').slice(0, 40), combatants: [], log: Array.isArray(st.log) ? st.log.slice(0, 40) : [] };
+if (st.mode === 'full' || st.mode === 'simple') out.mode = st.mode;
 out.oa = (Array.isArray(st.oa) ? st.oa : []).filter(function (o) { return o && o.id && o.m && o.h; }).slice(0, 8).map(function (o) { return { id: String(o.id).slice(0, 20), m: String(o.m).slice(0, 40), h: String(o.h).slice(0, 40) }; });
 (Array.isArray(st.combatants) ? st.combatants : []).forEach(function (c) {
 if (!c || typeof c !== 'object') return;
@@ -317,6 +326,7 @@ ds: { s: int(c.ds && c.ds.s, 0), f: int(c.ds && c.ds.f, 0) },
 pa: cleanPA(c.pa), lr: cleanLR(c.lr), sh: Math.max(0, Math.min(5, int(c.sh, 0))),
 eco: { g: Math.max(0, Math.min(3, int(c.eco && c.eco.g, 0))), a: int(c.eco && c.eco.a, 0) ? 1 : 0, n: Math.max(0, int(c.eco && c.eco.n, 0)), b: int(c.eco && c.eco.b, 0) ? 1 : 0, r: int(c.eco && c.eco.r, 0) ? 1 : 0, bs: Math.min(2, Math.max(0, int(c.eco && c.eco.bs, 0))) }
 });
+if (c.hid) out.combatants[out.combatants.length - 1].hid = 1;
 });
 var nF = out.map && out.map.fl ? 1 + out.map.fl.length : 1;
 out.combatants.forEach(function (c) { if (c.fl >= nF) { c.fl = 0; } });
@@ -341,9 +351,10 @@ if ($('psync')) $('psync').textContent = t[syncState] || '';
 }
 function save() {
 try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch (e) { /* stockage indisponible */ }
-if (docRef) { dbDirty = true; clearTimeout(dbTimer); dbTimer = setTimeout(flushDb, 120); }
+if (docRef && !csLave) { dbDirty = true; clearTimeout(dbTimer); dbTimer = setTimeout(flushDb, 120); }
 }
 function flushDb() {
+if (csLave) { dbDirty = false; return; }
 if (dbBusy || !dbDirty || !docRef) return;
 dbBusy = true; dbDirty = false;
 var ser = JSON.stringify(S);
@@ -371,13 +382,42 @@ var st = data && data.state;
 if (data && data.updatedAt) fast.lastTs = data.updatedAt;
 if (st && Array.isArray(st.combatants) && !dbDirty && !dbBusy) {
 var ser = JSON.stringify(st);
-if (ser !== lastSer) { try { var ns = normalize(st); lastSer = ser; S = ns; undoStack = []; redoStack = []; if (role === 'joueur' && pv.opt) optApply(); } catch (err) { lastSer = ser; } }
+if (ser !== lastSer) { try { if (csMustLave()) { lastSer = ser; csRaw = st; csRawAt = data.updatedAt || Date.now(); csPlayerApply(); } else { var ns = normalize(st); lastSer = ser; S = ns; csLave = false; csRaw = st; csRawAt = data.updatedAt || Date.now(); undoStack = []; redoStack = []; if (role === 'joueur' && pv.opt) optApply(); } } catch (err) { lastSer = ser; } }
 }
 } else if (first && localState) {
-S = normalize(localState);
+if (!csMustLave()) S = normalize(localState);
+else if (!csPlayerApply()) { try { S = normalize(window.tylPJ.lave(localState)); csLave = true; } catch (err) { /* ignoré */ } }
 }
 if (syncState === 'loading' || syncState === 'error') setSync('shared');
 render();
+}
+
+function csMustLave() { return !!window.tylPJ && isOwner !== true && (role === 'joueur' || isOwner === false); }
+/* joueuse : S = vue publiée si elle est utilisable, sinon dernier combat/state lavé. Retourne vrai si S a été remplacé. */
+function csPlayerApply() {
+if (!csMustLave()) return false;
+var P = window.tylPJ, v = null, ns = null;
+try { v = P.view ? P.view() : null; if (v) ns = normalize(P.fromView(v)); else if (csRaw) ns = normalize(P.lave(csRaw)); } catch (e) { ns = null; }
+if (!ns) return false;
+S = ns; csLave = true; undoStack = []; redoStack = [];
+if (role === 'joueur' && pv.opt) optApply();
+return true;
+}
+/* changement de rôle ou de droits : redevenu MJ avec un S lavé => on reprend l'état réel (C1) ; devenu joueuse => on lave */
+function csRoleSync() {
+if (csMustLave()) { if (!csLave) csPlayerApply(); return; }
+if (!csLave) return;
+csLave = false;
+if (csRaw) { try { S = normalize(csRaw); lastSer = JSON.stringify(csRaw); } catch (e) { lastSer = ''; } } else lastSer = '';
+undoStack = []; redoStack = [];
+fast.lastTs = 0; setTimeout(function () { pollState(true); }, 0);
+}
+/* action de joueuse appliquée hors de la pile « Annuler » du MJ (I2) : la même modification est reportée dans les états mémorisés */
+function csQuiet(c, fn) {
+fn(c);
+function patch(list) { return list.map(function (ser) { try { var o = JSON.parse(ser), a = o && Array.isArray(o.combatants) ? o.combatants : [], i; for (i = 0; i < a.length; i++) if (a[i] && a[i].id === c.id) { fn(a[i]); return JSON.stringify(o); } } catch (e) { /* ignoré */ } return ser; }); }
+undoStack = patch(undoStack); redoStack = patch(redoStack);
+render(); save();
 }
 
 var toastT = 0, saveNote = '';
@@ -582,14 +622,14 @@ function undo() {
 if (!undoStack.length) return;
 mutSeq++;
 redoStack.push(JSON.stringify(S)); if (redoStack.length > 30) redoStack.shift();
-S = normalize(JSON.parse(undoStack.pop()));
+var md0 = S.mode; S = normalize(JSON.parse(undoStack.pop())); csKeepMode(md0);
 render(); save(); uxToast('↶ Action annulée');
 }
 function redo() {
 if (!redoStack.length) return;
 mutSeq++;
 undoStack.push(JSON.stringify(S)); if (undoStack.length > 30) undoStack.shift();
-S = normalize(JSON.parse(redoStack.pop()));
+var md1 = S.mode; S = normalize(JSON.parse(redoStack.pop())); csKeepMode(md1);
 render(); save(); uxToast('↷ Action rétablie');
 }
 function uxToast(t) {
@@ -607,10 +647,12 @@ if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
 else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
 });
 function makeC(o, kind, init, name, base) {
-return {
+var c0 = {
 id: uid(), name: name, base: base, libId: o.libId || '', cid: o.cid || '', owner: o.owner || '', kind: kind, ac: o.ac, hp: o.hp, max: o.hp, temp: 0, b: o.b,
 init: init != null ? init : d(20) + o.b, conds: [], notes: '', ds: { s: 0, f: 0 }
 };
+if (o.hid) c0.hid = 1;
+return c0;
 }
 function addCreatures(o, kind, qty, init) {
 var existing = S.combatants.filter(function (c) { return c.base === o.n; }).length;
@@ -1261,6 +1303,8 @@ try { s0 = ae.selectionStart; s1 = ae.selectionEnd; } catch (e) { s0 = null; }
 var list = sorted();
 var shO = listEl.querySelector('.sped.open'), shT = shO ? shO.scrollTop : 0;
 listEl.innerHTML = list.map(cardHTML).join('');
+try { if (window.tylCS && window.tylCS.decorate) window.tylCS.decorate(listEl); } catch (e) { /* ignoré */ }
+try { if (window.tylTK && window.tylTK.decorate) window.tylTK.decorate(listEl); } catch (e) { /* ignoré */ }
 if (shT) { shO = listEl.querySelector('.sped.open'); if (shO) shO.scrollTop = shT; }
 if (key) {
 var el = listEl.querySelector('[data-key="' + key + '"]');
@@ -1329,7 +1373,7 @@ var now = $('now');
 if (!has) { now.hidden = true; return; }
 now.hidden = false;
 if (a) {
-now.innerHTML = mtHTML(a);
+now.innerHTML = simple() ? window.tylCS.nowHTML(a) : mtHTML(a);
 mtAuto(a);
 } else {
 mtClear();
@@ -1366,6 +1410,7 @@ return 'info';
 }
 var evKey = '', evTurnKey = '', evT0 = Date.now();
 function evActive() {
+if (simple()) return false;
 if (role === 'joueur') return !!myC() && pv.view !== 'classic' && !(typeof pvEdit !== 'undefined' && pvEdit);
 var b = $('mjSceneBox'); return !!b && b.open && view === 'combat';
 }
@@ -1413,7 +1458,7 @@ b.textContent = on ? map[id][1] : map[id][0];
 b.classList.toggle('armed', on);
 });
 }
-function render() { try { rcSync(); } catch (e) { /* ignoré */ } renderMjScene(); renderBar(); renderList(); renderLib(); renderLog(); renderManage(); renderSync(); renderFormBtns(); renderSpellFlow(); renderCreateList(); refreshTip(); renderPlayer(); renderPvNotes(); renderSnd(); renderPlayersPanel(); renderEnc(); renderCamp(); evCheck(); snWatch(); try { spedMountAll(); } catch (e) { /* ignoré */ } }
+function render() { csPre(); try { rcSync(); } catch (e) { /* ignoré */ } renderMjScene(); renderBar(); renderList(); renderLib(); renderLog(); renderManage(); renderSync(); renderFormBtns(); renderSpellFlow(); renderCreateList(); refreshTip(); renderPlayer(); renderPvNotes(); renderSnd(); renderPlayersPanel(); renderEnc(); renderCamp(); evCheck(); snWatch(); try { spedMountAll(); } catch (e) { /* ignoré */ } csPost(); }
 
 function tipData(key) {
 var p = key.split(':'), id = p.slice(1).join(':');
@@ -4442,6 +4487,7 @@ try { pv.pid = localStorage.getItem(PC_LS) || ''; } catch (e) { pv.pid = ''; }
 
 function mayProcess() { return isOwner === true || (isOwner === null && role === 'mj'); }
 function applyRole() {
+try { csRoleSync(); } catch (e) { /* ignoré */ }
 var pl = role === 'joueur';
 document.querySelectorAll('header.bar').forEach(function (h) { h.hidden = h.id === 'pbar' ? !pl : pl; });
 $('viewPlayer').hidden = !pl;
@@ -5462,7 +5508,7 @@ tokBusy[host.id + ':' + id] = Date.now() + dur;
 return true;
 }
 function scRender(host, mode) {
-if (!host) return;
+if (!host || simple()) return;
 var html = scHTML(mode), key = html.replace(/value="[^"]*"/g, '');
 if (host.__key === key) return;
 var ae = document.activeElement, keep = null;
@@ -5501,7 +5547,7 @@ if (on) scRender(host, 'pv');
 }
 function renderMjScene() {
 var box = $('mjSceneBox');
-if (!box || !box.open || role === 'joueur') return;
+if (!box || !box.open || role === 'joueur' || simple()) return;
 mjSyncCtl();
 if (!mjm.paint && !mjm.drag) renderEd();
 var sel = $('scEnv');
@@ -5946,10 +5992,12 @@ propCells(p).forEach(function (c) { var k = c[0] + ',' + c[1]; if (ls) w[k] = 1;
 return { w: w, d: df, o: o, wa: wa };
 }
 function mapOn() {
+if (simple()) return false;
 if (S.map && !S.map.pr) S.map = normalizeMap(S.map);
 return !!(S.map && S.map.on);
 }
 function fogCalc() {
+if (simple()) return null;
 var M = CM(), fa = M && M.fa ? M.fa : 0;
 if (!M || !fa) return null;
 var lit = {}, g = [], dm = [], sg = [], x, y;
@@ -6622,7 +6670,7 @@ if (c.conds && c.conds.length) b += '<i title="' + esc(c.conds.join(', ')) + '">
 return b ? '<span class="mp-bd">' + b + '</span>' : '';
 }
 var zoneShown = false;
-function zoneFlow() { var best = null; Object.keys(flows).forEach(function (k) { var f = flows[k]; if (f && f.zone && f.zone.step !== 'done' && (!best || f.src === S.activeId)) best = f; }); return best; }
+function zoneFlow() { if (simple()) return null; var best = null; Object.keys(flows).forEach(function (k) { var f = flows[k]; if (f && f.zone && f.zone.step !== 'done' && (!best || f.src === S.activeId)) best = f; }); return best; }
 function zoneOverlay(M) {
 var f = zoneFlow(); zoneShown = !!f;
 if (!f) return '';
@@ -7731,6 +7779,7 @@ shRender();
 renderPvScene();
 arRestore();
 renderLog();
+try { if (window.tylPJ && window.tylPJ.sync) window.tylPJ.sync(); } catch (e) { /* ignoré */ }
 }
 
 var pvEImg = '', pvEMsg = '', pvFEd = false, pvSigLast = '';
@@ -8860,7 +8909,7 @@ function pvTabsOn() { var m = $('pvMain'); return !!PVT_DEF && !PVL.flat && !pvE
 function pvtShown(id) { var el = $(id); return !!el && !el.hidden && !PVL.hide[id]; }
 function pvtNoMem(id) { if (!pvTabsOn()) return false; var t = pvtTabOf(id); return t === 'fiche' || t === 'sorts'; }
 function pvtSceneOn(c) {
-if (!c) return false;
+if (!c || simple()) return false;
 if (!PVT_DEF || PVL.flat || (S.activeId && byId(S.activeId))) return true;
 if (winKey()) return true;
 return mapOn() && !!c.p;
@@ -9139,15 +9188,26 @@ return false;
 }
 function actAllowed(a) {
 if (!a || typeof a !== 'object') return false;
+if (simple() && window.tylCS.forbidden(a.t) && !(isOwner === true && myViewer && String(a.from || '') === myViewer)) return false;
 if (isOwner === true && myViewer && String(a.from || '') === myViewer) return true;
 var pid = actOwnPid(a);
 if (!pid) return false;
 if (a.t === 'join' || a.t === 'mih') return String(a.pid || '') === pid;
 if (!a.actor) return a.t === 'say';
-return actIsMine(byId(a.actor), pid);
+if (!actIsMine(byId(a.actor), pid)) return false;
+if (a.t === 'hp' || a.t === 'roll' || a.t === 'eco') return !!window.tylPJ && !window.tylPJ.check(a, byId(a.actor), S);
+return true;
+}
+/* page de combat joueuse (combat-joueuse.js) : actions hp / roll / eco, revalidées ici avant tout effet */
+function csPjAct(a, c) {
+var P = window.tylPJ, why = P ? P.check(a, c, S) : 'module absent';
+if (why) { logLine('Action refusée (' + a.t + ' : ' + why + ')'); return; }
+if (a.t === 'roll' && !P.take(a.from)) { logLine('Jet ignoré : trop de jets de la même joueuse (5 par 10 s)'); return; }
+var why2 = P.apply(a, c, { mutate: mutate, logLine: logLine, ecoOf: ecoOf, quiet: csQuiet });
+if (why2) logLine('Action refusée (' + a.t + ' : ' + why2 + ')');
 }
 function procAction0(a) {
-if (!actAllowed(a)) { logLine('Action refusée (personnage non attribué à l\'expéditrice)'); return; }
+if (!actAllowed(a)) { logLine(simple() && window.tylCS.forbidden(a.t) ? 'Action refusée en mode Simplifié (' + a.t + ')' : (a.t === 'hp' || a.t === 'roll' || a.t === 'eco') ? 'Action refusée (' + a.t + ' hors des règles du mode Simplifié)' : 'Action refusée (personnage non attribué à l\'expéditrice)'); return; }
 var c = byId(a.actor), t = a.tgt ? byId(a.tgt) : null;
 fxCap = '';
 if (a.t === 'mih') { migFromAct(a); return; }
@@ -9161,6 +9221,7 @@ var pcj = petC(e, cc);
 mutate(function () { S.combatants.push(cc); if (pcj) S.combatants.push(pcj); }, e.name + ' rejoint le combat (initiative ' + cc.init + ')' + (pcj ? ', avec ' + pcj.name : ''));
 return;
 }
+if (a.t === 'hp' || a.t === 'roll' || a.t === 'eco') { csPjAct(a, c); return; }
 if (!c && a.t !== 'say') return;
 if (a.t === 'prop') { propAction(c, a); return; }
 if (a.t === 'move' && !S.activeId && int(a.free, 0)) {
@@ -10709,7 +10770,7 @@ return h.replace('<div class="mtp">', '<div class="mtp">' + legAskHTML()) + oaMj
 }
 var mjPk = true;
 try { if (localStorage.getItem('tylchronicle-mjpoke') === '0') mjPk = false; } catch (e) { mjPk = true; }
-function mjPoke() { var b = $('mjSceneBox'); return !!mjPk && role !== 'joueur' && !!b && b.open; }
+function mjPoke() { var b = $('mjSceneBox'); return !simple() && !!mjPk && role !== 'joueur' && !!b && b.open; }
 var _renderBar95 = renderBar;
 renderBar = function () { _renderBar95(); if (mjPoke()) scRender($('mjScene'), 'mj'); };
 var PK_SKIP = /^(vitesse|for\s|résistances?\b|immunités?|vulnérabilités?|sauvegardes?\b|compétences?|langues?|sens\b|vision|perception|attaques? multiples?|multiattaque|légendaire\s*$|résistance légendaire|seul)/i;
@@ -11090,10 +11151,12 @@ function oaValid(o) { var h = byId(o.h), m = byId(o.m); return !!(h && m && h.hp
 function oaMelee(c) { var r = []; atksFor(c).forEach(function (x, i) { if (!atkProf(x).ranged) r.push({ x: x, i: i }); }); return r; }
 function oaRegisterPre(c, path, from) { var np = c.p; c.p = from; try { oaRegister(c, path); } finally { c.p = np; } }
 function oaRegister(c, path) {
+if (simple()) return;
 var hs = oppHolders(c, path);
 S.oa = oaList().filter(function (o) { return o.m !== c.id; }).concat(hs.map(function (h) { return { id: uid(), m: c.id, h: h.id }; })).slice(-8);
 }
 function oaPlayerHTML() {
+if (simple()) return '';
 var who = pvActor();
 if (!who) return '';
 var ls = oaList().filter(function (o) { return o.h === who.id && oaValid(o); });
@@ -11107,6 +11170,7 @@ ml.map(function (r) { return '<button type="button" class="sc-btn atk" data-sc="
 }).join('');
 }
 function oaMjHTML() {
+if (simple()) return '';
 var ls = oaList().filter(oaValid);
 if (!ls.length) return '';
 return '<div class="mt-sec mt-oa"><b>⚡ Attaques d\'opportunité possibles</b><span class="muted"> · réaction, une attaque de mêlée, juste avant que la cible quitte l\'allonge.</span>' + ls.map(function (o) {
@@ -11188,7 +11252,7 @@ function fastTick() {
 var now = Date.now();
 if (!loaded || window.__nopoll) return;
 if (role !== 'joueur' && mayProcess()) { if (now - fast.act >= fastGap(fast.errA, 1500)) { fast.act = now; pollActs(); } }
-else if (now - fast.st >= fastGap(fast.errS, 2000)) { fast.st = now; pollState(); }
+else if (now - fast.st >= fastGap(fast.errS, 2000)) { fast.st = now; pollState(); try { if (window.tylPJ) window.tylPJ.poll(); } catch (e) { /* ignoré */ } }
 }
 function fastStart() {
 if (fast.w || fast.ok) return;
@@ -12165,6 +12229,8 @@ try { if (window.claude && window.claude.use) usePromise = window.claude.use('db
 Promise.resolve(usePromise).then(function (db) {
 if (!db) { startLocal(); return; }
 docRef = db.doc('combat/state');
+try { if (window.tylCS && window.tylCS.attachDb) window.tylCS.attachDb(db); } catch (e) { /* ignoré */ }
+try { if (window.tylPJ && window.tylPJ.attachDb) window.tylPJ.attachDb(db); } catch (e) { /* ignoré */ }
 protLoad(db);
 cpInit(db);
 snDb = db;
@@ -12172,7 +12238,7 @@ mlInit(db);
 cilInit(db);
 fastStart();
 fastRoom();
-docRef.onSnapshot(onRemote, function () { loaded = true; setSync('local'); docRef = null; render(); });
+docRef.onSnapshot(onRemote, function () { if (role === 'joueur' && window.tylPJ && window.tylPJ.hasView()) { loaded = true; setSync('shared'); render(); return; } loaded = true; setSync('local'); docRef = null; render(); });
 try { spellsCol = db.collection('spells'); spellsCol.onSnapshot(function (snap) { spcApply(snap.docs.map(function (ds) { return spcNorm(ds.data() || {}, ds.id); })); }, function () { spellsCol = null; spcLocal(); }); } catch (e) { spellsCol = null; spcLocal(); }
 try { migCol = db.collection('mgifts'); migCol.onSnapshot(function (snap) { migApply(snap.docs.map(function (ds) { return migNorm(ds.data() || {}, ds.id); })); }, function () { migCol = null; migLocal(); }); } catch (e) { migCol = null; migLocal(); }
 itemsCol = db.collection('items');
@@ -13404,7 +13470,7 @@ render();
 cpWire();
 var scKey = '';
 function scrollToMine() {
-if (role !== 'joueur' || !S.map || !S.map.on) return;
+if (role !== 'joueur' || !S.map || !S.map.on || simple()) return;
 var a = pvActor();
 if (!a || !a.p) return;
 var key = a.id + ':' + (a.fl | 0) + ':' + S.map.nm + ':' + S.map.w, sc = document.querySelector('#pvScene .mp-scroll'), t = sc ? sc.querySelector('.mp-tok[data-scu="' + a.id + '"]') : null;
@@ -13491,5 +13557,29 @@ renderPlayer = function () { var r = renderPlayer0.apply(this, arguments); try {
 render = uiWrap(render); renderMjScene = uiWrap(renderMjScene); renderEd = uiWrap(renderEd);
 ['pointerdown', 'click', 'change', 'input', 'keydown'].forEach(function (ev) { document.addEventListener(ev, syncFl, true); });
 initRole();
+try {
+if (window.tylCS && window.tylCS.bind) window.tylCS.bind({
+S: function () { return S; }, byId: byId, esc: esc, mutate: mutate, save: save, render: render, addCreatures: addCreatures, addGroup: addGroup,
+role: function () { return role; }, loaded: function () { return loaded; }, canPublish: function () { return isOwner === true && role !== 'joueur' && loaded; },
+best: function () { return BEST; }, fold: fold
+});
+} catch (e) { /* ignoré */ }
+try {
+if (window.tylPJ && window.tylPJ.bind) window.tylPJ.bind({
+S: function () { return S; }, esc: esc, role: function () { return role; }, simple: simple, loaded: function () { return loaded; },
+entry: myEntry, send: sendAction, cdesc: cdesc, canJoin: canJoin,
+status: function () { return { pending: pv.pending, msg: pv.msg, err: pv.err }; },
+rescrub: function () { if (csMustLave() && !csLave && csPlayerApply()) render(); },
+stateAt: function () { return csRawAt; },
+viewChanged: function () { if (csPlayerApply() && !loaded) { loaded = true; setSync('shared'); } render(); },
+weapons: function (vc) { var c = myC() || (vc ? normalize({ combatants: [vc] }).combatants[0] : null); if (!c) return []; var raw = atksFor(c); if (!raw.length) { var e0 = myEntry(), xa = e0 && e0.x && Array.isArray(e0.x.atk) ? e0.x.atk : []; return xa.slice(0, 12).map(function (a) { return { n: String(a.n || 'Arme').slice(0, 60), b: int(a.b, 0), parts: parseDmg(String(a.d || '') + ' ' + String(a.t || '')) }; }); } return raw.map(function (x, i) { var L = atkLbl(c, x, i); return { n: x.n, b: L.b, parts: (L.parts || []).map(function (z) { return { d: z.d, t: z.t || '' }; }) }; }); }
+});
+} catch (e) { /* ignoré */ }
+try {
+if (window.tylTK && window.tylTK.bind) window.tylTK.bind({
+S: function () { return S; }, esc: esc, role: function () { return role; }, simple: simple, loaded: function () { return loaded; }, render: render,
+mine: function () { var c = role === 'joueur' ? myC() : null; return c ? c.id : ''; }
+});
+} catch (e) { /* ignoré */ }
 initStorage();
 })();
