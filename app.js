@@ -13567,7 +13567,7 @@ best: function () { return BEST; }, fold: fold
 try {
 if (window.tylPJ && window.tylPJ.bind) window.tylPJ.bind({
 S: function () { return S; }, esc: esc, role: function () { return role; }, simple: simple, loaded: function () { return loaded; },
-entry: myEntry, send: sendAction, cdesc: cdesc, canJoin: canJoin,
+entry: myEntry, send: sendAction, cdesc: cdesc, canJoin: canJoin, pa: pvOnClick,
 status: function () { return { pending: pv.pending, msg: pv.msg, err: pv.err }; },
 rescrub: function () { if (csMustLave() && !csLave && csPlayerApply()) render(); },
 stateAt: function () { return csRawAt; },

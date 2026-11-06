@@ -441,6 +441,7 @@
     if (!host || !H) return;
     var on = active(), e = on ? H.entry() : null, view = on ? cur() : null;
     doc.body.classList.toggle('cs-pj-on', !!(on && e && view));
+    pbAvail(!!(on && e && view));
     if (!on || !e || !view) { host.hidden = true; return; }
     var me = mineOf(view, e.id), out = html(view, e, me);
     host.hidden = false;
@@ -463,7 +464,94 @@
     paint();
   }
 
+
+  /* =================== Panneau « Mon combat » dans le tableau plein écran ===================
+     Même contenu que la page de combat : on DÉPLACE #csPj (PV, cases, armes, conditions, tour) et #pvTrack (emplacements, capacités,
+     concentration) dans le panneau, puis on les remet à leur place au repli ou à la fermeture du tableau. Une seule instance, aucun
+     doublon, mêmes actions (hp / roll / eco / data-pa) et mêmes validations. Le tableau n'est jamais modifié. */
+  var pb = { ov: null, fab: null, panel: null, body: null, close: null, open: false, ph: null, built: false };
+
+  function pbBuild() {
+    if (pb.built) return;
+    var fab = doc.createElement('button'), pan = doc.createElement('section'), head = doc.createElement('div'), h = doc.createElement('h2'), cl = doc.createElement('button'), body = doc.createElement('div');
+    fab.id = 'csTbFab'; fab.type = 'button'; fab.hidden = true; fab.className = 'cs-tb-fab'; fab.textContent = 'Mon combat';
+    fab.setAttribute('aria-controls', 'csTbPanel'); fab.setAttribute('aria-expanded', 'false');
+    pan.id = 'csTbPanel'; pan.hidden = true; pan.className = 'cs-tb-panel'; pan.setAttribute('role', 'region'); pan.setAttribute('aria-label', 'Mon combat');
+    head.className = 'cs-tb-head'; h.textContent = 'Mon combat';
+    cl.id = 'csTbClose'; cl.type = 'button'; cl.className = 'cs-tb-close'; cl.textContent = 'Replier'; cl.setAttribute('aria-label', 'Replier Mon combat');
+    body.id = 'csTbBody'; body.className = 'cs-tb-body';
+    head.appendChild(h); head.appendChild(cl); pan.appendChild(head); pan.appendChild(body);
+    fab.addEventListener('click', function () { pbSet(!pb.open, false); });
+    cl.addEventListener('click', function () { pbSet(false, true); });
+    /* les boutons data-pa (Terminer mon tour, Rejoindre, jet contre la mort) sont écoutés par la page joueuse : même chemin, sans le recopier */
+    pan.addEventListener('click', function (ev) { if (ev.target && ev.target.closest && ev.target.closest('[data-pa]') && H && H.pa) H.pa(ev); });
+    /* Échap replie le panneau avant de fermer le tableau (écouteur posé avant celui du tableau, en capture) */
+    root.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape' && pb.open) { ev.preventDefault(); ev.stopImmediatePropagation(); pbSet(false, true); }
+    }, true);
+    root.addEventListener('resize', pbPlace);
+    pb.fab = fab; pb.panel = pan; pb.body = body; pb.close = cl; pb.built = true;
+  }
+  /* repères de mise en page : sous la barre du haut, au-dessus de la barre d'outils du tableau (mesurés, car la barre peut se replier sur 2 lignes) */
+  function pbPlace() {
+    if (!pb.ov) return;
+    var o = pb.ov.getBoundingClientRect(), t = pb.ov.querySelector('.pb-top'), b = pb.ov.querySelector('.pb-bar');
+    pb.ov.style.setProperty('--cs-tb-top', (t ? Math.max(0, t.getBoundingClientRect().bottom - o.top) : 0) + 'px');
+    pb.ov.style.setProperty('--cs-tb-bot', (b ? Math.max(0, o.bottom - b.getBoundingClientRect().top) : 0) + 'px');
+  }
+  function pbMount() {
+    if (pb.ph) return;
+    pb.ph = [];
+    [$('csPj'), $('pvTrack')].forEach(function (el) {
+      if (!el || !el.parentNode) return;
+      var mark = doc.createComment('cs-tb');
+      el.parentNode.insertBefore(mark, el);
+      pb.ph.push({ el: el, mark: mark });
+      pb.body.appendChild(el);
+    });
+  }
+  function pbUnmount() {
+    if (!pb.ph) return;
+    pb.ph.forEach(function (p) {
+      if (p.mark.parentNode) { p.mark.parentNode.insertBefore(p.el, p.mark); p.mark.parentNode.removeChild(p.mark); }
+    });
+    pb.ph = null;
+  }
+  function pbSet(open, focusBack) {
+    if (!pb.built) return;
+    open = !!open && !pb.fab.hidden && !!pb.ov;
+    if (open === pb.open) return;
+    pb.open = open;
+    pb.fab.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) {
+      pbPlace(); pb.panel.hidden = false; pbMount();
+      try { pb.close.focus(); } catch (e) { /* ignoré */ }
+    } else {
+      pb.panel.hidden = true; pbUnmount();
+      if (focusBack && !pb.fab.hidden) { try { pb.fab.focus(); } catch (e2) { /* ignoré */ } }
+    }
+  }
+  /* le bouton n'existe que si la page de combat existe (joueuse, Simplifié, dans un combat) */
+  function pbAvail(ok) {
+    if (!pb.built || !pb.ov) return;
+    pb.fab.hidden = !ok;
+    if (ok) pbPlace(); else pbSet(false, false);
+  }
+  /* point d'entrée de tableau-joueuse.js : board(overlay) à l'ouverture, board(null) à la fermeture */
+  function board(ov) {
+    if (ov) {
+      pbBuild();
+      if (pb.ov !== ov) { pb.ov = ov; ov.appendChild(pb.fab); ov.appendChild(pb.panel); }
+      if (H) { build(); paint(); }
+      pbPlace();
+    } else if (pb.built) {
+      pbSet(false, false);
+      pb.fab.hidden = true; pb.ov = null;
+    }
+  }
+
   api.bind = function (h) { H = h; };
+  api.board = board;
   api.attachDb = function (db) { dbh = db; };
   api.sync = sync;
   api.poll = poll;

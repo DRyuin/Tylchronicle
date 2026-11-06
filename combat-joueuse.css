@@ -70,3 +70,30 @@ body.cs-pj-on #pvTrack .tkl button, body.cs-pj-on #pvTrack .tkrest .btn, body.cs
   #csPj { max-width: 720px; margin: 0 auto; width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { #csPj * { transition: none !important; animation: none !important; } }
+
+/* ---------- panneau « Mon combat » dans le tableau plein écran (joueuse, Simplifié) ----------
+   Tout vit dans #pbOv ; les éléments n'existent que pendant l'ouverture du tableau et le bouton n'est montré que pour une joueuse en combat Simplifié.
+   Téléphone / portrait : volet bas au-dessus de la barre d'outils du tableau. Grand écran / paysage : volet latéral à droite. */
+#csTbFab[hidden], #csTbPanel[hidden] { display: none !important; }
+#csTbFab { position: absolute; z-index: 5; right: max(12px, env(safe-area-inset-right)); top: calc(var(--cs-tb-top, 56px) + 10px); box-sizing: border-box; min-width: 44px; min-height: 48px; padding: 0 16px; border: 2px solid var(--brass); border-radius: 24px; background: var(--surface); color: var(--ink); font: inherit; font-size: 1rem; font-weight: 700; cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, .25); touch-action: manipulation; display: inline-flex; align-items: center; justify-content: center; }
+#csTbFab[aria-expanded="true"] { display: none; }
+#csTbFab:focus-visible, #csTbClose:focus-visible { outline: 3px solid var(--brass); outline-offset: 2px; }
+#csTbPanel { position: absolute; z-index: 6; box-sizing: border-box; display: flex; flex-direction: column; left: env(safe-area-inset-left, 0px); right: env(safe-area-inset-right, 0px); bottom: var(--cs-tb-bot, 0px); max-height: 62%; background: var(--surface); color: var(--ink); border-top: 2px solid var(--brass); box-shadow: 0 -4px 16px rgba(0, 0, 0, .3); border-radius: 14px 14px 0 0; overflow: hidden; }
+.cs-tb-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 8px 4px 14px; border-bottom: 1px solid var(--line); }
+.cs-tb-head h2 { margin: 0; font-family: var(--font-display); font-size: 1.15rem; }
+#csTbClose { box-sizing: border-box; min-width: 44px; min-height: 44px; padding: 0 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); color: var(--ink); font: inherit; font-size: 1rem; cursor: pointer; touch-action: manipulation; }
+#csTbBody { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 12px; padding: 10px 12px 14px; }
+#csTbBody > #csPj { order: 1; max-width: none; margin: 0; width: 100%; box-sizing: border-box; }
+#csTbBody > #pvTrack { order: 2; margin: 0; }
+#csTbBody > .box { box-shadow: none; }
+/* le résumé replié du suivi des ressources est remplacé par le contenu complet dans le panneau */
+#csTbBody #pvTrack.pvt-fold > .pvtsum { display: none; }
+#csTbBody #pvTrack.pvt-fold > h2 { display: block; }
+#csTbBody #pvTrack.pvt-fold:not(.pvt-open) > :not(.pvtsum) { display: revert; }
+@media (min-width: 700px) and (orientation: landscape), (min-width: 1000px) {
+  #csTbPanel { left: auto; top: var(--cs-tb-top, 56px); bottom: var(--cs-tb-bot, 0px); width: min(380px, 46vw); max-height: none; border-top: 0; border-left: 2px solid var(--brass); border-radius: 0; box-shadow: -4px 0 16px rgba(0, 0, 0, .3); }
+}
+/* hors #viewPlayer, les règles de lecture de la page joueuse ne s'appliquent plus : texte >= 14 px et cibles >= 44 px rétablis pour le suivi des ressources */
+#csTbBody .tkl .tkv, #csTbBody .tksum, #csTbBody details.tkadd > summary, #csTbBody details.tkadd label, #csTbBody .hint, #csTbBody .tk .muted { font-size: .875rem; }
+#csTbBody details.tkadd > summary { min-height: 44px; display: flex; align-items: center; }
+#csTbBody #pvTrack input:not([type="checkbox"]):not([type="radio"]), #csTbBody #pvTrack select, #csTbBody #pvTrack .btn, #csTbBody #pvTrack button { min-height: 44px; box-sizing: border-box; }

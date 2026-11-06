@@ -470,6 +470,7 @@
     try { var mn = $('pvMenu'); if (mn) mn.open = false; } catch (e) { /* ignoré */ }
     var ov = $('pbOv');
     ov.hidden = false; S.open = true; doc.documentElement.className += ' pb-lock';
+    try { if (root.tylPJ && root.tylPJ.board) root.tylPJ.board(ov); } catch (e6) { /* ignoré */ }   /* panneau « Mon combat » (combat-joueuse.js), Simplifié seulement */
     S.pings.clear(); S.strokes.clear(); S.pingMode = false; $('pbPing').setAttribute('aria-pressed', 'false'); msg('');
     if (root.history && root.history.pushState) { try { root.history.pushState({ tylBoard: 1 }, ''); S.pushed = true; } catch (e2) { S.pushed = false; } }
     root.addEventListener('keydown', onDocKey, true);   /* capture sur window : passe avant les écouteurs de l'appli */
@@ -494,6 +495,7 @@
     S.pings.clear(); S.strokes.clear(); clearTimeout(S.expT);
     if (S.mq) { try { if (S.mq.removeEventListener) S.mq.removeEventListener('change', onTheme); else if (S.mq.removeListener) S.mq.removeListener(onTheme); } catch (e4) { /* ignoré */ } S.mq = null; }
     S.open = false; ov.hidden = true;
+    try { if (root.tylPJ && root.tylPJ.board) root.tylPJ.board(null); } catch (e7) { /* ignoré */ }
     /* mémoire (téléphone) : canvas à 0 (layout() les redimensionne à la réouverture), cache d'images vidé */
     $('pbCv').width = $('pbCv').height = $('pbLv').width = $('pbLv').height = 0;
     S.imgOrder.slice().forEach(forgetImg); S.imgs = {}; S.imgOrder = []; S.imgFail = {};
