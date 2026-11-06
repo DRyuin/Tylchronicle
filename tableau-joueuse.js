@@ -84,7 +84,7 @@
     for (i = 0; i < els.length && n < 60; i++) {
       e = els[i]; li = null;
       if (e.t === 'text') li = 'Texte : ' + e.tx;
-      else if (e.t === 'token') li = 'Jeton : ' + (e.lb || 'sans nom');
+      else if (e.t === 'token') li = 'Jeton : ' + (e.lb || 'sans nom') + (e.cid && root.tylTK && root.tylTK.alt && root.tylTK.alt(e.cid) ? ' (' + root.tylTK.alt(e.cid) + ')' : '');
       else if (e.t === 'img') li = 'Image' + (e.lb ? ' : ' + e.lb : '');
       if (li) { var x = doc.createElement('li'); x.textContent = li; ul.appendChild(x); n++; }
     }
@@ -196,7 +196,7 @@
   function drawEl(g, e, ar) {
     R = R || root.tylBoardDraw;
     if (!R) return;
-    R.drawEl(g, e, ar, { colorOf: colorOf, theme: S.theme, img: getImg, s: S.dpr * S.ren.z * S.Wf, ox: S.dpr * S.ren.ox, oy: S.dpr * S.ren.oy, mj: false });
+    R.drawEl(g, e, ar, { colorOf: colorOf, theme: S.theme, img: getImg, s: S.dpr * S.ren.z * S.Wf, ox: S.dpr * S.ren.ox, oy: S.dpr * S.ren.oy, mj: false, dpr: S.dpr, deco: root.tylTK && root.tylTK.deco });
   }
   function paintStatic() {
     var cv = $('pbCv'), g = cv.getContext('2d'), bd = S.board, ar, els, i;
@@ -542,5 +542,5 @@
       view: { z: S.view.z, ox: S.view.ox, oy: S.view.oy }, cursor: { x: S.cursor.x, y: S.cursor.y }, anim: !reduced(), pingMode: S.pingMode, who: S.name };
   }
 
-  root.tylBoardPlayer = { init: init, open: openBoard, close: function () { closeBoard(true); }, state: state, toScreen: toScreen };
+  root.tylBoardPlayer = { redraw: function () { if (S.open && S.board) { redraw(true); updateAlt(); } }, init: init, open: openBoard, close: function () { closeBoard(true); }, state: state, toScreen: toScreen };
 })(window);

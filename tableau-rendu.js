@@ -90,6 +90,7 @@
       g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = textOn(col); g.font = '700 ' + px + 'px Alegreya Sans, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
       g.fillText(t, C.ox + cx * C.s, C.oy + cy * C.s); g.restore();
     }
+    if (C.deco && e.cid) { g.save(); try { C.deco(g, e, cx, cy, r, C); } catch (x) { /* pastille facultative */ } g.restore(); }   /* pastilles du combat simplifié (combat-jetons.js) */
   }
   function drawEl(g, e, ar, C) {
     var k = 1 / ar, b, o, col, cx, cy, hid = !!(C.mj && e.hid);

@@ -144,7 +144,7 @@
     for (k in S.imgs) { if (Object.prototype.hasOwnProperty.call(S.imgs, k) && !keep[k]) forgetImg(k); }
   }
   var R = null;
-  function ctxR() { return { colorOf: colorOf, theme: S.theme, img: getImg, s: S.dpr * S.ren.z * S.Wf, ox: S.dpr * S.ren.ox, oy: S.dpr * S.ren.oy, mj: true }; }
+  function ctxR() { return { colorOf: colorOf, theme: S.theme, img: getImg, s: S.dpr * S.ren.z * S.Wf, ox: S.dpr * S.ren.ox, oy: S.dpr * S.ren.oy, mj: true, dpr: S.dpr, deco: root.tylTK && root.tylTK.deco }; }
   function drawEl(g, e, ar) { R = R || root.tylBoardDraw; if (!R) return; R.drawEl(g, e, ar, ctxR()); }
   function paintStatic() {
     var cv = $('tbCv'), g = cv.getContext('2d'), bd = S.board, ar = bd.ar, els = bd.els, i, t0 = S.ren;
@@ -272,7 +272,7 @@
     if (S.shown && (needBoard || urgent || late)) {
       if (!force && !urgent && now - S.lastLive < LIVE_GAP) S.liveLate = true;   /* différé : écriture groupée dans ≤ 2,5 s */
       else {
-        var ld = project(S.board, S.bid, S.shownAt || now);
+        var ld = project(S.board, S.bid, S.shownAt || now, linkCtx());
         wroteLive = true; S.lastLive = now; S.liveLate = false;
         if (M.utf8Len(JSON.stringify(ld)) * 1.15 > LIM.live - 10000) { S.shown = false; S.liveBid = ''; msg('Trop lourd pour être montré aux joueuses (500 Ko maximum) : le tableau a été caché. Supprime des éléments.', true); syncUi(); S.lrv++; jobs.push(db.doc('board/live').set(hiddenLive(S.lrv))); }
         else { S.lrv++; ld.rv = S.lrv; jobs.push(db.doc('board/live').set(ld)); }
@@ -356,7 +356,7 @@
       if (e && h) { S.drag = { mode: 'resize', h: h, id: e.id, pre: snap() }; S.hideId = e.id; redraw(true); return; }
       var id = hitTest(S.board.els, n.x, n.y, tolN(8), S.board.ar);
       e = id ? elById(id) : null;
-      if (e && !e.lk) { S.sel = id; S.drag = { mode: 'move', id: id, last: n, pre: snap() }; S.hideId = id; syncUi(); redraw(true); }
+      if (e && !e.lk) { S.sel = id; S.drag = { mode: 'move', id: id, last: n, pre: snap() }; S.hideId = id; syncUi(); redraw(true); if (e.cid) linkPick(e.cid); }
       else { S.sel = null; S.drag = { mode: 'pan', last: p }; syncUi(); redraw(false); }
     }
   }
@@ -646,6 +646,7 @@
   }
   function enter() {
     layout(); S.theme = themeColors(); fitView(); listen(); savePref(); syncUi(); redraw(true);
+    try { if (root.tylTK && root.tylTK.onOpen) root.tylTK.onOpen(); } catch (e) { /* ignoré */ }
     status(S.exists ? 'Enregistré' : 'Nouveau tableau');
   }
   function initExt() {
@@ -726,6 +727,12 @@
     return { boards: S.board ? boardList() : [], liveBid: S.liveBid, newHid: S.newHid, bid: S.bid, name: b.name, ar: b.ar, els: JSON.parse(JSON.stringify(b.els)), tool: S.tool, shown: S.shown, dirty: S.dirty, rv: S.rv, sel: S.sel, view: { z: S.view.z, ox: S.view.ox, oy: S.view.oy }, hist: S.hist.size(), imgs: Object.keys(S.imgs),
       pings: S.pings.list(Date.now()).map(function (p) { return { x: p.x, y: p.y, n: p.n }; }) };
   }
+
+  /* ---------- Points d'entrée du combat simplifié : le lien jeton <-> combattant vit dans tableau-lien.js, la pastille dans combat-jetons.js ---------- */
+  function linkCtx() { try { return root.tylTK && root.tylTK.projCtx ? root.tylTK.projCtx() : null; } catch (e) { return null; } }
+  function linkPick(cid) { try { if (root.tylTK && root.tylTK.onPick) root.tylTK.onPick(cid); } catch (e) { /* ignoré */ } }
+  api.link = root.tylBoardLink ? root.tylBoardLink.create({ S: S, TAB: TAB, LIVE_GAP: LIVE_GAP, services: services, load: load, loadPref: loadPref, adopt: adopt, newBoard: newBoard, newId: newId,
+    snap: snap, commitHist: commitHist, addEl: addEl, delEl: delEl, flush: flush, schedule: schedule, setTool: setTool, syncUi: syncUi, redraw: redraw, project: project, validateBoard: validateBoard, ctx: linkCtx }) : null;
 
   api.enabled = enabled; api.refreshButton = refreshButton; api.open = open; api.close = close; api.state = state; api.toScreen = toScreen;
   api._exportInfo = function () { return S.ext ? S.ext.exportInfo() : null; };

@@ -1,0 +1,22 @@
+/* combat-jetons.css : jetons liés au tableau (tranche T4). Charte inchangée (variables de style.css).
+   Rien ici ne s'applique en mode Complet : les éléments créés par combat-jetons.js restent cachés, et les règles sont sous body.cs-simple / body.cs-pj-on. */
+
+/* ---- rangée « Tableau » du panneau d'ajout rapide (MJ) ---- */
+.cs-quick .tk-row .btn { flex: 1 1 40%; min-height: 48px; }
+.cs-quick .tk-row .tk-msg { flex: 1 1 100%; min-height: 1.2em; }
+
+/* ---- cartes du tracker : bouton de pose et combattant choisi ---- */
+body.cs-simple #list .card .tk-btn { min-height: 44px; }
+body.cs-simple #list li.card.tk-sel { outline: 3px solid var(--brass); outline-offset: 2px; }
+
+/* ---- bandeau d'info du jeton choisi, dans le tableau du MJ ---- */
+.tk-info { position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 5; display: flex; align-items: center; gap: 8px; padding: 6px 8px; box-sizing: border-box;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--brass); border-radius: 10px; box-shadow: var(--soft); pointer-events: none; }   /* le texte laisse passer les touchers vers les jetons dessous ; seul le bouton les capte */
+.tk-info[hidden] { display: none; }
+.tk-info .tk-i-txt { flex: 1 1 auto; min-width: 0; font-size: 15px; line-height: 1.25; overflow-wrap: anywhere; }
+.tk-info .tb-btn { flex: 0 0 auto; pointer-events: auto; }
+
+/* ---- un seul bandeau « C'est ton tour » en Simplifié : la page de combat a le sien (#csPj .cs-pj-turn) ----
+   Le bandeau collant du haut (#pvTurnTop) reste sur les autres onglets (Ma fiche, Sorts, Histoire) où la page de combat n'est pas affichée. */
+body.cs-pj-on #viewPlayer:not(.pvtabs) #pvTurnTop,
+body.cs-pj-on #viewPlayer.pvtabs[data-pvtab-on="jouer"] #pvTurnTop { display: none !important; }

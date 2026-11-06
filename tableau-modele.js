@@ -87,13 +87,16 @@
     return { board: out, dropped: dropped };
   }
 
-  /* Projection visible des joueuses : jamais d'élément hid, jamais cid / hid / lk. */
-  function project(board, bid, shown) {
+  /* Projection visible des joueuses : jamais d'élément hid, jamais hid / lk, cid seulement si ctx.keepCid (combat simplifié).
+     ctx facultatif (combat simplifié) : hiddenCids = combattants cachés (leurs jetons sont retirés), dropLinked = état de combat inconnu (aucun jeton lié). */
+  function project(board, bid, shown, ctx) {
     var vb = validateBoard(board).board, els = [], i, e;
     for (i = 0; i < vb.els.length; i++) {
       e = vb.els[i];
       if (e.hid || e.t === 'rule') continue;
-      delete e.cid; delete e.hid; delete e.lk;
+      if (ctx && e.cid && (ctx.dropLinked || (ctx.hiddenCids && hasOwn.call(ctx.hiddenCids, e.cid)))) continue;
+      if (!(ctx && ctx.keepCid)) delete e.cid;
+      delete e.hid; delete e.lk;
       els.push(e);
     }
     return { v: 1, on: true, bid: String(bid || ''), name: vb.name, ar: vb.ar, bg: vb.bg, scale: vb.scale, rv: vb.rv, els: els, shown: shown || 0 };
