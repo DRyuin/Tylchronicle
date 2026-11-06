@@ -1,0 +1,72 @@
+/* combat-joueuse.css : page de combat personnelle de la joueuse (mode Simplifié, tranche T3b). Charte inchangée (variables de style.css).
+   Tout est conditionné par body.cs-pj-on (posé seulement pour une joueuse en Simplifié) ou par #csPj (hidden hors Simplifié) :
+   en mode Complet rien de ce fichier ne s'applique => rendu inchangé. */
+
+#csPj[hidden] { display: none !important; }
+
+/* l'ancienne colonne de combat (ordre de jeu, boutons d'attaque automatisés, rejoindre) est remplacée par #csPj */
+body.cs-pj-on #viewPlayer #pvMain.pvgrid.pvgrid.pvgrid #pvStatus,
+body.cs-pj-on #viewPlayer #pvMain.pvgrid.pvgrid.pvgrid #pvStatusR,
+body.cs-pj-on #viewPlayer #pvMain.pvgrid.pvgrid.pvgrid #pvActions,
+body.cs-pj-on #viewPlayer #pvMain.pvgrid.pvgrid.pvgrid #pvIdle { display: none !important; }
+
+#csPj { display: flex; flex-direction: column; gap: 12px; min-width: 0; grid-column: 1 / -1; }
+#viewPlayer.pvtabs:not(.pvedit) #pvMain.pvgrid > #csPj { order: -70; max-width: none; }
+#csPj h2 { font-family: var(--font-display); font-size: 1.25rem; margin: 0; }
+#csPj h3 { font-family: var(--font-display); font-size: 1.05rem; margin: 6px 0 0; }
+#csPj .muted { color: var(--muted); }
+
+.cs-pj-turn { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); font-weight: 700; font-size: 1.05rem; }
+.cs-pj-turn.me { background: var(--brass-soft); border-color: var(--brass); box-shadow: 0 0 0 1px var(--brass); color: var(--ink); }
+.cs-pj-round { font-family: var(--font-display); letter-spacing: .04em; }
+.cs-pj-msg { margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); font-size: .95rem; }
+.cs-pj-msg.err { border-color: var(--bad); }
+
+.cs-pj-me { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; }
+.cs-pj-hp { display: flex; align-items: center; gap: 10px; }
+.cs-pj-hp .hpbar { flex: 1; min-width: 0; height: 14px; }
+.cs-hpv { font-size: 1.35rem; white-space: nowrap; }
+.cs-hpt { font-size: .95rem; color: var(--muted); white-space: nowrap; }
+
+.cs-pj-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cs-pj-lbl { flex: 1 1 100%; font-size: .95rem; color: var(--muted); }
+#csPj .cs-pj-b { flex: 1 1 64px; min-width: 52px; min-height: 52px; font-size: 1.1rem; justify-content: center; }
+#csPj .cs-pj-big { flex: 1 1 100%; min-height: 56px; font-size: 1.15rem; border-radius: 14px; }
+
+#csPj .cs-pj-eco .cs-eco { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; overflow-wrap: anywhere; gap: 0; line-height: 1.15; padding: 6px 4px; min-height: 60px; }
+.cs-pj-eco .cs-eco span, .cs-pj-eco .cs-eco small { display: block; }
+.cs-pj-eco .cs-eco small { font-size: .9rem; color: var(--muted); }
+.cs-pj-eco .cs-eco.used { background: var(--surface-2); border-style: dashed; color: var(--muted); }
+.cs-pj-eco .cs-eco.used span { text-decoration: line-through; }
+.cs-pj-eco .cs-eco:not(.used) { border-color: var(--brass); }
+
+.cs-pj-conds, .cs-pj-kids, .cs-pj-rolls, .cs-pj-weap { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.cs-pj-conds li, .cs-pj-kids li, .cs-pj-rolls li { padding: 8px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); font-size: .95rem; }
+.cs-pj-ds { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--bad); display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.cs-pj-weap li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
+.cs-pj-wn { flex: 1 1 140px; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.cs-pj-wn span { font-size: .95rem; color: var(--muted); overflow-wrap: anywhere; }
+.cs-pj-wb { flex: 0 1 auto; display: flex; gap: 8px; }
+.cs-pj-wb .cs-pj-b { flex: 0 0 auto; padding: 0 14px; min-width: 88px; }
+
+.cs-pj-ord > summary { cursor: pointer; min-height: 48px; display: flex; align-items: center; }
+.cs-pj-ord > summary h3 { margin: 0; display: inline; }
+.cs-pj-ord ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.cs-pj-ord li { display: flex; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); min-height: 44px; align-items: center; font-size: 1rem; }
+.cs-pj-ord li.act { background: var(--brass-soft); border-color: var(--brass); font-weight: 700; }
+.cs-pj-ord li.me .nm { text-decoration: underline; text-underline-offset: 3px; }
+.cs-pj-ord li.down { opacity: .7; }
+.cs-pj-ord .ini li, .cs-pj-ord .ini .st, .cs-pj-ord .ini .nm, .cs-pj-ord .ini .nm span { font-size: 1rem; }
+.cs-pj-ord .nm { min-width: 0; overflow-wrap: anywhere; }
+.cs-pj-ord .st { white-space: nowrap; }
+
+/* ressources (emplacements, capacités, concentration) : cases du suivi existant, agrandies pour le pouce */
+body.cs-pj-on #pvTrack { order: -65; }
+body.cs-pj-on #pvTrack .tkl button, body.cs-pj-on #pvTrack .tkrest .btn, body.cs-pj-on #pvTrack .tkctr .btn { min-height: 44px; min-width: 44px; }
+
+@media (min-width: 701px) {
+  .cs-pj-turn { font-size: 1.15rem; }
+  #csPj { max-width: 720px; margin: 0 auto; width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { #csPj * { transition: none !important; animation: none !important; } }
