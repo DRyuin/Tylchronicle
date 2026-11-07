@@ -241,6 +241,8 @@
   var H = null, dbh = null, viewRef = null, vdoc = null, vloaded = false, vbusy = false, vlast = 0, vErrAt = 0;
   var edit = null, ecoEdit = {}, rolls = [], note = '', noteT = 0, hpT = 0, lastHtml = '', lastNat = {}, scrubbed = false;
   var mine = makeLimiter(5, 10000);
+  /* onglets (combat-onglets.js) : onglet courant (mémoire locale), niveau d'emplacement choisi par sort, dégâts du dernier sort à attaque, attaques faites ce tour */
+  var TB = root.tylTabs, TAB_LS = 'tylchronicle-cs-tab', curTab = '', slotSel = {}, pend = null, atkMem = { key: '', n: 0 }, trkMark = null;
 
   function $(id) { return doc.getElementById(id); }
   function esc(s) { return H && H.esc ? H.esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' }[c]; }); }
@@ -279,8 +281,13 @@
     host = doc.createElement('section');
     host.id = 'csPj'; host.className = 'box cs-pj'; host.hidden = true;
     host.setAttribute('data-pvt', 'jouer'); host.setAttribute('aria-label', 'Mon combat');
+    host.innerHTML = '<div id="csPjIn" class="cs-in"></div><div id="csPark" hidden></div>';
     main.insertBefore(host, main.firstChild);
     host.addEventListener('click', onClick);
+    host.addEventListener('keydown', onKey);
+    host.addEventListener('change', onChange);
+    var trk = $('pvTrack');
+    if (trk && trk.parentNode && !trkMark) { trkMark = doc.createComment('cs-trk'); trk.parentNode.insertBefore(trkMark, trk); }
     return host;
   }
 
@@ -316,15 +323,60 @@
     clearTimeout(hpT); hpT = setTimeout(flushHp, 700);
     paint();
   }
+  /* ----- économie d'action : une pastille (a / b / r) par type ; tout contrôle porte un type (combat-onglets.js : gate) ----- */
+  function usedOf(me) {
+    var eco = me.eco || {}, o = {};
+    ['a', 'b', 'r'].forEach(function (k) { o[k] = ecoEdit[k] && now() - ecoEdit[k].at < 6000 ? ecoEdit[k].v : (eco[k] ? 1 : 0); });
+    return o;
+  }
+  /* attaques faites ce tour (pour l'attaque supplémentaire) : mémoire locale, remise à zéro au changement de tour ou quand l'Action est décochée */
+  function atkCount(me, view, used) {
+    var k = view.round + ':' + view.act + ':' + me.id;
+    if (atkMem.key !== k || !used.a) atkMem = { key: k, n: 0 };
+    return atkMem.n;
+  }
+  function stOf(me, view, extra) {
+    var used = usedOf(me), mx = H.extra ? H.extra() | 0 : 1;
+    return { used: used, fight: !!(view.act || view.foe), myTurn: !!(view.act && view.act === me.id), atkN: atkCount(me, view, used), atkMax: Math.max(1, mx), weapon: !!(extra && extra.weapon) };
+  }
+  /* seul endroit qui envoie l'action existante eco */
+  function setEco(me, view, k, v) {
+    var was = ecoEdit[k];
+    ecoEdit[k] = { v: v, at: now() };   /* avant l'envoi : le rendu déclenché par l'envoi doit déjà voir la case cochée */
+    if (send({ t: 'eco', actor: me.id, k: k, v: v }, me, view)) return true;
+    if (was) ecoEdit[k] = was; else delete ecoEdit[k];
+    return false;
+  }
   function toggleEco(me, view, k) {
-    var was = ecoEdit[k] && now() - ecoEdit[k].at < 6000 ? ecoEdit[k].v : (me.eco && me.eco[k] ? 1 : 0), v = was ? 0 : 1;
-    if (send({ t: 'eco', actor: me.id, k: k, v: v }, me, view)) ecoEdit[k] = { v: v, at: now() };
+    setEco(me, view, k, usedOf(me)[k] ? 0 : 1);
     paint();
+  }
+  /* utiliser un élément de type ty : refuse s'il est grisé (message court), sinon renvoie { tick } (cocher la pastille APRÈS avoir réussi) */
+  function allow(me, view, ty, extra) {
+    var g = TB.gate(ty, stOf(me, view, extra));
+    if (g.off) { flash(TB.denyMsg(ty, g.why)); paint(); return null; }
+    return g;
+  }
+  function budget(n) {
+    if (!n) return true;
+    if (mine.take('me', now())) return true;
+    flash('Doucement : 5 jets au plus par 10 secondes.'); paint();
+    return false;
+  }
+  /* seul endroit qui envoie l'action existante roll */
+  function sendRoll(me, view, title, r, nat) {
+    var o = { t: 'roll', actor: me.id, title: clean1(title, 60), expr: r.expr, total: r.total, nat: nat | 0 };
+    if (!send(o, me, view)) return false;
+    rolls.unshift({ title: o.title, total: r.total, detail: r.detail, nat: o.nat });
+    rolls = rolls.slice(0, 5);
+    return true;
   }
   function doRoll(me, view, i, kind) {
     var w = (H.weapons(me) || [])[i];
     if (!w) return;
-    if (!mine.take('me', now())) { flash('Doucement : 5 jets au plus par 10 secondes.'); paint(); return; }
+    var g = kind === 'atk' ? allow(me, view, 'a', { weapon: true }) : { tick: false };
+    if (!g) return;
+    if (!budget(1)) return;
     var title, r, nat = 0;
     if (kind === 'atk') {
       r = attackRoll(w.b);
@@ -335,22 +387,145 @@
       if (!r) { flash('Dégâts illisibles pour cette arme.'); paint(); return; }
       lastNat[i] = 0; title = clean1(w.n, 40) + (crit ? ' (dégâts critiques)' : ' (dégâts)');
     }
-    var o = { t: 'roll', actor: me.id, title: title, expr: r.expr, total: r.total, nat: nat };
-    if (send(o, me, view)) {
-      rolls.unshift({ title: title, total: r.total, detail: r.detail, nat: nat });
-      rolls = rolls.slice(0, 5);
+    if (sendRoll(me, view, title, r, nat) && kind === 'atk') {
+      var n0 = atkCount(me, view, { a: 1 });
+      atkMem.n = n0 + 1;
+      if (g.tick) setEco(me, view, 'a', 1);
     }
     paint();
   }
 
+  /* ----- sorts : liste de la fiche (app.js : pvMySpells), emplacements via tkCast (app.js), jets via roll ----- */
+  function spellRows() { return H.spells ? H.spells() || [] : []; }
+  function findSpell(e) { var l = spellRows(), i; for (i = 0; i < l.length; i++) if (l[i].e === e) return l[i]; return null; }
+  /* niveaux d'emplacement possibles pour ce sort (vide = plus d'emplacement) */
+  function levelsOf(r, memo) {
+    var key = r.e;
+    if (memo && memo[key]) return memo[key];
+    var out = [], c = [r.l], inf = H.slotInfo ? H.slotInfo() : null, lv;
+    if (r.l === 0) out = H.castCheck(r, 0) ? [] : [0];
+    else {
+      if (inf) { for (lv = r.l + 1; lv <= inf.n; lv++) c.push(lv); if (inf.pact > r.l) c.push(inf.pact); }
+      c.sort(function (a, b) { return a - b; });
+      c.forEach(function (x, ix) { if (c.indexOf(x) === ix && !H.castCheck(r, x)) out.push(x); });
+    }
+    if (memo) memo[key] = out;
+    return out;
+  }
+  function noSlotText(r) {
+    var err = r.l > 0 ? H.castCheck(r, r.l) : '';
+    return /^Plus d'utilisation/.test(err) ? 'Plus d\'utilisation' : 'Plus d\'emplacement';
+  }
+  function partsExpr(info) { return (info && info.parts ? info.parts : []).map(function (p) { return p.d; }).join('+'); }
+  function castSpell(me, view, e) {
+    var row = findSpell(e);
+    if (!row) return;
+    var ty = TB.spellType(row), g = allow(me, view, ty);
+    if (!g) return;
+    var lv = levelsOf(row), slot = row.l > 0 ? (lv.indexOf(slotSel[row.e]) >= 0 ? slotSel[row.e] : lv[0]) : 0;
+    if (!lv.length) { flash(noSlotText(row) + '.'); paint(); return; }
+    var pre = H.castCheck(row, slot);
+    if (pre) { flash(pre); paint(); return; }
+    var info = H.castInfo ? H.castInfo(row, slot) : null, rr = null, nat = 0, title = '';
+    if (row.at) { rr = attackRoll(info ? info.atk : 0); nat = rr.nat; title = row.n + ' (toucher)'; }
+    else if (partsExpr(info)) {
+      rr = rollDice(partsExpr(info), false);
+      if (!rr) { flash('Dégâts illisibles pour ce sort.'); paint(); return; }
+      title = row.n + (info.heal ? ' (soin)' : ' (dégâts)') + (row.sv && info.dc ? ' · DD ' + info.dc + ' ' + row.sv : '');
+    }
+    if (!budget(rr ? 1 : 0)) return;
+    var res = H.cast(row, slot);
+    if (!res || res.err) { flash(res && res.err ? res.err : 'Sort impossible.'); paint(); return; }
+    if (g.tick) setEco(me, view, ty, 1);
+    if (rr) sendRoll(me, view, title, rr, nat);
+    pend = row.at && partsExpr(info) ? { e: row.e, slot: slot, nat: nat } : null;
+    flash(row.n + ' lancé' + (row.l > 0 && slot > row.l ? ' (emplacement niv. ' + slot + ')' : '') + (res.replaced ? ' ; tu perds la concentration sur ' + res.replaced : '') + '.');
+    paint();
+  }
+  function spellDmg(me, view, e) {
+    var row = findSpell(e), p = pend;
+    if (!row || !p || p.e !== e) return;
+    var info = H.castInfo ? H.castInfo(row, p.slot) : null, crit = p.nat === 20, rr = rollDice(partsExpr(info), crit);
+    if (!rr) { flash('Dégâts illisibles pour ce sort.'); paint(); return; }
+    if (!budget(1)) return;
+    if (sendRoll(me, view, row.n + (crit ? ' (dégâts critiques)' : ' (dégâts)'), rr, 0)) pend = null;
+    paint();
+  }
+
+  /* ----- sac : équipement de la fiche (texte), quantité réécrite par app.js (libSave) ----- */
+  function bagNow() { var b = H.bag ? H.bag() : { text: '', over: {} }; return { text: b.text, over: b.over, items: TB.parseBag(b.text) }; }
+  function useItem(me, view, key) {
+    var bag = bagNow(), it = null, i;
+    for (i = 0; i < bag.items.length; i++) if (bag.items[i].key === key) it = bag.items[i];
+    if (!it || !it.usable || it.qty < 1) return;
+    var ty = TB.bagType(it, bag.over), g = allow(me, view, ty);
+    if (!g) return;
+    var rr = it.dice ? rollDice(it.dice, false) : null;
+    if (it.heal && !rr) { flash('Soin illisible pour cet objet.'); paint(); return; }
+    if (!budget(rr ? 1 : 0)) return;
+    if (!H.bagSet(TB.setQty(bag.text, key, it.qty - 1), null)) return;
+    if (g.tick) setEco(me, view, ty, 1);
+    if (rr) sendRoll(me, view, it.name + (it.heal ? ' (soin)' : ''), rr, 0);
+    if (it.heal && rr) bumpHp(me, rr.total, 0);
+    flash(it.name + ' utilisé' + (it.heal && rr ? ' : +' + rr.total + ' PV (au plus ton maximum)' : '') + '.');
+    paint();
+  }
+  function toggleBagType(key) {
+    var bag = bagNow(), it = null, i;
+    for (i = 0; i < bag.items.length; i++) if (bag.items[i].key === key) it = bag.items[i];
+    if (!it) return;
+    var over = {}, k;
+    for (k in bag.over) if (has(bag.over, k) && (bag.over[k] === 'a' || bag.over[k] === 'b')) over[k] = bag.over[k];
+    over[key] = TB.bagType(it, bag.over) === 'b' ? 'a' : 'b';
+    H.bagSet(null, over);
+    paint();
+  }
+
+  /* ----- onglets ----- */
+  function tabGet() {
+    if (curTab) return curTab;
+    var v = '';
+    try { v = root.localStorage.getItem(TAB_LS) || ''; } catch (e) { v = ''; }
+    curTab = TB.validTab(v);
+    return curTab;
+  }
+  function selectTab(id, focus) {
+    curTab = TB.validTab(id);
+    try { root.localStorage.setItem(TAB_LS, curTab); } catch (e) { /* stockage indisponible : l'onglet marche quand même */ }
+    paint();
+    if (focus) { var b = $('csPj') ? $('csPj').querySelector('[data-cs-tab="' + curTab + '"]') : null; if (b) { try { b.focus(); } catch (er) { /* ignoré */ } } }
+  }
+  function onKey(ev) {
+    var t = ev.target;
+    if (!t || !t.hasAttribute || !t.hasAttribute('data-cs-tab')) return;
+    var nx = TB.nextTab(t.getAttribute('data-cs-tab'), ev.key);
+    if (!nx) return;
+    ev.preventDefault();
+    selectTab(nx, true);
+  }
+  function onChange(ev) {
+    var t = ev.target;
+    if (!t || !t.hasAttribute || !t.hasAttribute('data-cs-slot')) return;
+    slotSel[t.getAttribute('data-cs-slot')] = parseInt(t.value, 10) || 0;
+    paint();
+  }
+
   function onClick(ev) {
-    var t = ev.target && ev.target.closest ? ev.target.closest('[data-cs-hp],[data-cs-tmp],[data-cs-eco],[data-cs-roll]') : null;
-    if (!t || t.disabled) return;
+    var t = ev.target && ev.target.closest ? ev.target.closest('[data-cs-hp],[data-cs-tmp],[data-cs-eco],[data-cs-roll],[data-cs-tab],[data-cs-cast],[data-cs-sdmg],[data-cs-use],[data-cs-bt]') : null;
+    if (!t) return;
+    if (t.hasAttribute('data-cs-tab')) { selectTab(t.getAttribute('data-cs-tab'), false); return; }
     var view = cur(), e = H.entry(), me = view && e ? mineOf(view, e.id) : null;
     if (!me) return;
+    /* contrôle grisé atteint quand même (clavier, lecteur d'écran) : message court, rien n'est envoyé ni consommé */
+    if (t.getAttribute('aria-disabled') === 'true') { flash(TB.denyMsg(t.getAttribute('data-cs-ty'), t.getAttribute('data-cs-why'))); paint(); return; }
+    if (t.disabled) return;
     if (t.hasAttribute('data-cs-hp')) bumpHp(me, parseInt(t.getAttribute('data-cs-hp'), 10) || 0, 0);
     else if (t.hasAttribute('data-cs-tmp')) bumpHp(me, 0, parseInt(t.getAttribute('data-cs-tmp'), 10) || 0);
     else if (t.hasAttribute('data-cs-eco')) toggleEco(me, view, t.getAttribute('data-cs-eco'));
+    else if (t.hasAttribute('data-cs-cast')) castSpell(me, view, t.getAttribute('data-cs-cast'));
+    else if (t.hasAttribute('data-cs-sdmg')) spellDmg(me, view, t.getAttribute('data-cs-sdmg'));
+    else if (t.hasAttribute('data-cs-use')) useItem(me, view, t.getAttribute('data-cs-use'));
+    else if (t.hasAttribute('data-cs-bt')) toggleBagType(t.getAttribute('data-cs-bt'));
     else if (t.hasAttribute('data-cs-roll')) {
       var row = t.closest('[data-cs-w]');
       doRoll(me, view, row ? parseInt(row.getAttribute('data-cs-w'), 10) || 0 : 0, t.getAttribute('data-cs-roll'));
@@ -373,7 +548,6 @@
     else msg = me ? 'En attente du premier tour du MJ' : 'Le combat n\'a pas commencé';
     h += '<div class="cs-pj-turn' + (myTurn ? ' me' : '') + '" role="status" aria-live="polite"><span class="cs-pj-round">Round ' + esc(view.round) + '</span> <span>' + esc(msg) + '</span></div>';
     if (st && (st.pending || st.msg)) h += '<p class="cs-pj-msg' + (st.err ? ' err' : '') + '" role="status">' + esc(st.msg || st.pending) + '</p>';
-    if (note) h += '<p class="cs-pj-msg err" role="status">' + esc(note) + '</p>';
     if (!me) {
       h += '<h2>Combat</h2>';
       if (H.canJoin()) h += '<p class="muted">Un combat est préparé. Touche le bouton : ton initiative est lancée (d20 + ton bonus) et tu es ajouté à l\'ordre de jeu.</p><div class="cs-pj-row"><button type="button" class="btn primary cs-pj-big" data-pa="join">Rejoindre le combat</button></div>';
@@ -383,42 +557,75 @@
     var ed = edit && now() - edit.at < 9000 ? edit : null;
     /* envoi confirmé, ou PV changés par le MJ depuis l'envoi : on affiche les PV reçus */
     if (ed && ed.sent && ((ed.hp === me.hp && ed.temp === me.temp) || me.hp !== ed.base || me.temp !== ed.bt)) { edit = null; ed = null; }
-    var hp = ed ? ed.hp : me.hp, temp = ed ? ed.temp : me.temp, p = pct(hp, me.max);
-    h += '<div class="cs-pj-me"><h2>' + esc(me.name) + '</h2><span class="muted">CA ' + esc(me.ac) + ' · Init. ' + esc(me.init) + '</span></div>';
-    h += '<div class="cs-pj-hp"><div class="hpbar ' + (p <= 25 ? 'bad' : p <= 50 ? 'warn' : '') + '" role="img" aria-label="PV ' + esc(hp) + ' sur ' + esc(me.max) + '"><i style="width:' + p + '%"></i></div>' +
-      '<b class="cs-hpv">' + esc(hp) + ' / ' + esc(me.max) + '</b>' + (temp ? '<span class="cs-hpt">(+' + esc(temp) + ' temp.)</span>' : '') + '</div>';
-    h += '<div class="cs-pj-row" role="group" aria-label="Corriger mes PV">' + [-5, -1, 1, 5].map(function (n) {
-      return '<button type="button" class="btn cs-pj-b" data-cs-hp="' + n + '" aria-label="' + (n < 0 ? 'Retirer ' + (-n) : 'Ajouter ' + n) + ' PV">' + (n < 0 ? '−' + (-n) : '+' + n) + '</button>';
-    }).join('') + '</div>';
-    h += '<div class="cs-pj-row" role="group" aria-label="Mes PV temporaires"><span class="cs-pj-lbl">PV temp. : ' + esc(temp) + '</span>' + [-1, 1, 5].map(function (n) {
-      return '<button type="button" class="btn cs-pj-b" data-cs-tmp="' + n + '" aria-label="' + (n < 0 ? 'Retirer ' + (-n) : 'Ajouter ' + n) + ' PV temporaire' + (Math.abs(n) > 1 ? 's' : '') + '">' + (n < 0 ? '−' + (-n) : '+' + n) + '</button>';
-    }).join('') + '</div>';
-    if (me.conds && me.conds.length) {
-      h += '<ul class="cs-pj-conds" aria-label="Mes états">' + me.conds.map(function (x) { var d = H.cdesc(x); return '<li><b>' + esc(x) + '</b>' + (d ? ' : ' + esc(d) : '') + '</li>'; }).join('') + '</ul>';
+    var hp = ed ? ed.hp : me.hp, temp = ed ? ed.temp : me.temp, p = pct(hp, me.max), tab = tabGet(), body = '';
+    var end = myTurn ? '<div class="cs-pj-row"><button type="button" class="btn primary cs-pj-big" data-pa="end">Terminer mon tour</button></div>' : '';
+    if (tab === 'infos') {
+      body += '<div class="cs-pj-me"><h2>' + esc(me.name) + '</h2><span class="muted">CA ' + esc(me.ac) + ' · Init. ' + esc(me.init) + '</span></div>';
+      body += '<div class="cs-pj-hp"><div class="hpbar ' + (p <= 25 ? 'bad' : p <= 50 ? 'warn' : '') + '" role="img" aria-label="PV ' + esc(hp) + ' sur ' + esc(me.max) + '"><i style="width:' + p + '%"></i></div>' +
+        '<b class="cs-hpv">' + esc(hp) + ' / ' + esc(me.max) + '</b>' + (temp ? '<span class="cs-hpt">(+' + esc(temp) + ' temp.)</span>' : '') + '</div>';
+      body += '<div class="cs-pj-row" role="group" aria-label="Corriger mes PV">' + [-5, -1, 1, 5].map(function (n) {
+        return '<button type="button" class="btn cs-pj-b" data-cs-hp="' + n + '" aria-label="' + (n < 0 ? 'Retirer ' + (-n) : 'Ajouter ' + n) + ' PV">' + (n < 0 ? '−' + (-n) : '+' + n) + '</button>';
+      }).join('') + '</div>';
+      body += '<div class="cs-pj-row" role="group" aria-label="Mes PV temporaires"><span class="cs-pj-lbl">PV temp. : ' + esc(temp) + '</span>' + [-1, 1, 5].map(function (n) {
+        return '<button type="button" class="btn cs-pj-b" data-cs-tmp="' + n + '" aria-label="' + (n < 0 ? 'Retirer ' + (-n) : 'Ajouter ' + n) + ' PV temporaire' + (Math.abs(n) > 1 ? 's' : '') + '">' + (n < 0 ? '−' + (-n) : '+' + n) + '</button>';
+      }).join('') + '</div>';
+      if (me.conds && me.conds.length) {
+        body += '<ul class="cs-pj-conds" aria-label="Mes états">' + me.conds.map(function (x) { var d = H.cdesc(x); return '<li><b>' + esc(x) + '</b>' + (d ? ' : ' + esc(d) : '') + '</li>'; }).join('') + '</ul>';
+      }
+      if (me.hp <= 0) {
+        body += '<div class="cs-pj-ds"><b>Jets contre la mort</b> : ' + esc((me.ds || {}).s | 0) + ' réussite(s), ' + esc((me.ds || {}).f | 0) + ' échec(s) <button type="button" class="btn primary cs-pj-b" data-pa="death">Jet contre la mort</button></div>';
+      }
+      body += '<div class="cs-trk" data-cs-trk></div>' + end;
+      if (rolls.length) {
+        body += '<h3>Mes derniers jets</h3><ol class="cs-pj-rolls">' + rolls.map(function (r) { return '<li><b>' + esc(r.title) + '</b> : ' + esc(r.total) + ' <span class="muted">(' + esc(r.detail) + ')' + (r.nat === 20 ? ' · critique !' : r.nat === 1 ? ' · échec critique' : '') + '</span></li>'; }).join('') + '</ol>';
+      }
+      if (kids.length) body += '<ul class="cs-pj-kids" aria-label="Mes compagnons">' + kids.map(function (k) { return '<li><b>' + esc(k.name) + '</b> (compagnon) : ' + esc(k.hp) + ' / ' + esc(k.max) + ' PV</li>'; }).join('') + '</ul>';
+      body += orderHTML(view, me);
+    } else if (tab === 'armes') {
+      var ws = H.weapons(me) || [], cx0 = cxOf(view, me), nMax = cx0.st().atkMax;
+      body += '<h3>Mes armes</h3>' + (nMax > 1 ? '<p class="muted cs-note">Attaque supplémentaire : ' + esc(Math.min(cx0.st().atkN, nMax)) + ' / ' + esc(nMax) + ' attaques ce tour.</p>' : '');
+      if (!ws.length) body += '<p class="muted">Aucune arme sur ta fiche.</p>';
+      else body += '<ul class="cs-pj-weap">' + ws.map(function (w, j) {
+        var dm = (w.parts || []).map(function (z) { return z.d + (z.t ? ' ' + z.t : ''); }).join(' + ');
+        var a = TB.actBtn(cx0, { attrs: 'data-cs-roll="atk"', ty: 'a', label: 'Lancer', aria: 'Lancer l\'attaque : ' + w.n, primary: true, extra: { weapon: true } });
+        var d = (w.parts || []).length ? TB.actBtn(cx0, { attrs: 'data-cs-roll="dmg"', ty: 'g', label: lastNat[j] === 20 ? 'Dégâts critiques' : 'Dégâts', aria: 'Lancer les dégâts : ' + w.n }).html : '<button type="button" class="btn cs-pj-b" data-cs-ty="g" disabled aria-disabled="true" aria-label="Pas de dégâts pour ' + esc(w.n) + '">Dégâts</button>';
+        return '<li data-cs-w="' + j + '"><div class="cs-pj-wn"><b>' + esc(w.n) + '</b> <span class="cs-ty cs-ty-a" data-ty="a">Action</span><span>' + (w.b >= 0 ? '+' : '−') + Math.abs(w.b | 0) + (dm ? ' · ' + esc(dm) : '') + '</span></div>' +
+          '<div class="cs-pj-wb">' + a.html + d + '</div></li>';
+      }).join('') + '</ul>';
+      body += end;
+    } else if (tab === 'sorts') {
+      body += TB.spellsHTML(cxOf(view, me)) + end;
+    } else {
+      body += '<h3>Mon sac</h3>' + TB.bagHTML(cxOf(view, me)) + end;
     }
-    if (me.hp <= 0) {
-      h += '<div class="cs-pj-ds"><b>Jets contre la mort</b> : ' + esc((me.ds || {}).s | 0) + ' réussite(s), ' + esc((me.ds || {}).f | 0) + ' échec(s) <button type="button" class="btn primary cs-pj-b" data-pa="death">Jet contre la mort</button></div>';
-    }
-    var eco = me.eco || {};
-    h += '<h3>Mon tour</h3><div class="cs-pj-row cs-pj-eco" role="group" aria-label="Actions du tour">' + [['a', 'Action'], ['b', 'Bonus'], ['r', 'Réaction']].map(function (x) {
-      var used = ecoEdit[x[0]] && now() - ecoEdit[x[0]].at < 6000 ? ecoEdit[x[0]].v : (eco[x[0]] ? 1 : 0);
-      return '<button type="button" class="btn cs-pj-b cs-eco' + (used ? ' used' : '') + '" data-cs-eco="' + x[0] + '" aria-pressed="' + (used ? 'true' : 'false') + '"><span>' + x[1] + '</span><small>' + (used ? 'utilisée' : 'libre') + '</small></button>';
-    }).join('') + '</div>';
-    if (myTurn) h += '<div class="cs-pj-row"><button type="button" class="btn primary cs-pj-big" data-pa="end">Terminer mon tour</button></div>';
-    var ws = H.weapons(me) || [];
-    h += '<h3>Mes armes</h3>';
-    if (!ws.length) h += '<p class="muted">Aucune arme sur ta fiche.</p>';
-    else h += '<ul class="cs-pj-weap">' + ws.map(function (w, j) {
-      var dm = (w.parts || []).map(function (z) { return z.d + (z.t ? ' ' + z.t : ''); }).join(' + ');
-      return '<li data-cs-w="' + j + '"><div class="cs-pj-wn"><b>' + esc(w.n) + '</b><span>' + (w.b >= 0 ? '+' : '−') + Math.abs(w.b | 0) + (dm ? ' · ' + esc(dm) : '') + '</span></div>' +
-        '<div class="cs-pj-wb"><button type="button" class="btn primary cs-pj-b" data-cs-roll="atk" aria-label="Lancer l\'attaque : ' + esc(w.n) + '">Lancer</button>' +
-        '<button type="button" class="btn cs-pj-b" data-cs-roll="dmg" aria-label="Lancer les dégâts : ' + esc(w.n) + '"' + ((w.parts || []).length ? '' : ' disabled') + '>' + (lastNat[j] === 20 ? 'Dégâts critiques' : 'Dégâts') + '</button></div></li>';
-    }).join('') + '</ul>';
-    if (rolls.length) {
-      h += '<h3>Mes derniers jets</h3><ol class="cs-pj-rolls">' + rolls.map(function (r) { return '<li><b>' + esc(r.title) + '</b> : ' + esc(r.total) + ' <span class="muted">(' + esc(r.detail) + ')' + (r.nat === 20 ? ' · critique !' : r.nat === 1 ? ' · échec critique' : '') + '</span></li>'; }).join('') + '</ol>';
-    }
-    if (kids.length) h += '<ul class="cs-pj-kids" aria-label="Mes compagnons">' + kids.map(function (k) { return '<li><b>' + esc(k.name) + '</b> (compagnon) : ' + esc(k.hp) + ' / ' + esc(k.max) + ' PV</li>'; }).join('') + '</ul>';
-    return h + orderHTML(view, me);
+    var used = usedOf(me);
+    var band = '<div class="cs-sticky"><div class="cs-pj-row cs-pj-eco" role="group" aria-label="Actions du tour">' + [['a', 'Action'], ['b', 'Bonus'], ['r', 'Réaction']].map(function (x) {
+      var u = used[x[0]];
+      return '<button type="button" class="btn cs-pj-b cs-eco' + (u ? ' used' : '') + '" data-cs-eco="' + x[0] + '" aria-pressed="' + (u ? 'true' : 'false') + '"><span>' + x[1] + '</span><small>' + (u ? 'utilisée' : 'libre') + '</small></button>';
+    }).join('') + '</div>' + TB.tabsHTML(tab) + '<p class="cs-status" role="status" aria-live="polite">' + statusHTML() + '</p></div>';
+    h += band;
+    TB.TABS.forEach(function (t) {
+      h += '<div class="cs-panel" role="tabpanel" id="csp-' + t[0] + '" aria-labelledby="cst-' + t[0] + '" tabindex="0"' + (t[0] === tab ? '' : ' hidden') + '>' + (t[0] === tab ? body : '') + '</div>';
+    });
+    return h;
+  }
+  /* ligne d'état fixe : message court (refus, sort lancé, potion) puis dernier jet */
+  function statusHTML() {
+    var s = note ? '<span class="cs-note-t">' + esc(note) + '</span> ' : '';
+    if (rolls.length) s += '<span class="cs-last">Dernier jet : <b>' + esc(rolls[0].title) + '</b> : ' + esc(rolls[0].total) + '</span>';
+    return s;
+  }
+  /* contexte fourni aux constructeurs d'onglets (combat-onglets.js) */
+  function cxOf(view, me) {
+    var memo = {}, b = bagNow(), slots = H.slotInfo ? H.slotInfo() : null;
+    return {
+      esc: esc, pend: pend, bag: { items: b.items, over: b.over }, spells: spellRows(),
+      st: function (extra) { return stOf(me, view, extra); },
+      levels: function (r) { return levelsOf(r, memo); },
+      slotPick: function (r, lv) { return lv.indexOf(slotSel[r.e]) >= 0 ? slotSel[r.e] : lv[0]; },
+      noSlot: function (r) { return noSlotText(r); },
+      slotsLine: slots && slots.max ? function (L) { var m = slots.max[L - 1]; return m ? '(' + slots.left[L - 1] + '/' + m + ' emplacements)' : ''; } : null
+    };
   }
   function orderHTML(view, me) {
     var o = orderOf(view);
@@ -431,10 +638,21 @@
 
   function focusKey(el) {
     if (!el || !el.getAttribute) return '';
-    var k = ['data-cs-hp', 'data-cs-tmp', 'data-cs-eco', 'data-pa'].filter(function (a) { return el.hasAttribute(a); })[0];
+    var k = ['data-cs-hp', 'data-cs-tmp', 'data-cs-eco', 'data-pa', 'data-cs-tab', 'data-cs-cast', 'data-cs-sdmg', 'data-cs-use', 'data-cs-bt', 'data-cs-slot'].filter(function (a) { return el.hasAttribute(a); })[0];
     if (k) return k + '=' + el.getAttribute(k);
     if (el.hasAttribute('data-cs-roll')) { var r = el.closest('[data-cs-w]'); return 'roll=' + el.getAttribute('data-cs-roll') + '@' + (r ? r.getAttribute('data-cs-w') : ''); }
     return '';
+  }
+  /* le suivi des ressources (#pvTrack, app.js) vit dans l'onglet Infos quand les onglets sont là, sinon à sa place d'origine ; une seule instance */
+  function trackPlace(host, tabsOn) {
+    var trk = $('pvTrack'), park = $('csPark'), slot = host.querySelector('[data-cs-trk]');
+    if (!trk || !park) return;
+    if (!tabsOn) {
+      if (host.contains(trk) && trkMark && trkMark.parentNode) trkMark.parentNode.insertBefore(trk, trkMark.nextSibling);
+      return;
+    }
+    if (slot) { if (trk.parentNode !== slot) slot.appendChild(trk); }
+    else if (trk.parentNode !== park) park.appendChild(trk);
   }
   function paint() {
     var host = $('csPj');
@@ -442,16 +660,22 @@
     var on = active(), e = on ? H.entry() : null, view = on ? cur() : null;
     doc.body.classList.toggle('cs-pj-on', !!(on && e && view));
     pbAvail(!!(on && e && view));
-    if (!on || !e || !view) { host.hidden = true; return; }
-    var me = mineOf(view, e.id), out = html(view, e, me);
+    if (!on || !e || !view) { trackPlace(host, false); doc.body.classList.remove('cs-pj-tabs'); host.hidden = true; return; }
+    var me = mineOf(view, e.id), out = html(view, e, me), inner = $('csPjIn'), tabsOn = !!me;
     host.hidden = false;
-    if (out === lastHtml) return;
-    var key = host.contains(doc.activeElement) ? focusKey(doc.activeElement) : '';
-    lastHtml = out; host.innerHTML = out;
-    if (key) {
-      var cand = host.querySelectorAll('button'), j;
-      for (j = 0; j < cand.length; j++) if (focusKey(cand[j]) === key) { try { cand[j].focus(); } catch (er) { /* ignoré */ } break; }
+    doc.body.classList.toggle('cs-pj-tabs', tabsOn);
+    if (out !== lastHtml) {
+      var key = host.contains(doc.activeElement) ? focusKey(doc.activeElement) : '';
+      var trk = $('pvTrack'), park = $('csPark');
+      if (trk && park && inner.contains(trk)) park.appendChild(trk);   /* le suivi ne doit pas être effacé avec l'onglet Infos */
+      lastHtml = out; inner.innerHTML = out;
+      if (key) {
+        var cand = host.querySelectorAll('button, select'), j;
+        for (j = 0; j < cand.length; j++) if (focusKey(cand[j]) === key) { try { cand[j].focus(); } catch (er) { /* ignoré */ } break; }
+      }
     }
+    trackPlace(host, tabsOn);
+    if (tabsOn && TB && TB.decorateTrack) TB.decorateTrack($('pvTrack'), stOf(me, view));
   }
 
   function sync() {
@@ -504,6 +728,7 @@
     pb.ph = [];
     [$('csPj'), $('pvTrack')].forEach(function (el) {
       if (!el || !el.parentNode) return;
+      if (el.id === 'pvTrack' && el.closest && el.closest('#csPj')) return;   /* déjà dans l'onglet Infos : il voyage avec #csPj */
       var mark = doc.createComment('cs-tb');
       el.parentNode.insertBefore(mark, el);
       pb.ph.push({ el: el, mark: mark });
@@ -513,9 +738,13 @@
   function pbUnmount() {
     if (!pb.ph) return;
     pb.ph.forEach(function (p) {
-      if (p.mark.parentNode) { p.mark.parentNode.insertBefore(p.el, p.mark); p.mark.parentNode.removeChild(p.mark); }
+      if (p.mark.parentNode) {
+        if (!(p.el.id === 'pvTrack' && p.el.closest && p.el.closest('#csPj'))) p.mark.parentNode.insertBefore(p.el, p.mark);
+        p.mark.parentNode.removeChild(p.mark);
+      }
     });
     pb.ph = null;
+    paint();
   }
   function pbSet(open, focusBack) {
     if (!pb.built) return;

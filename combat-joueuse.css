@@ -97,3 +97,79 @@ body.cs-pj-on #pvTrack .tkl button, body.cs-pj-on #pvTrack .tkrest .btn, body.cs
 #csTbBody .tkl .tkv, #csTbBody .tksum, #csTbBody details.tkadd > summary, #csTbBody details.tkadd label, #csTbBody .hint, #csTbBody .tk .muted { font-size: .875rem; }
 #csTbBody details.tkadd > summary { min-height: 44px; display: flex; align-items: center; }
 #csTbBody #pvTrack input:not([type="checkbox"]):not([type="radio"]), #csTbBody #pvTrack select, #csTbBody #pvTrack .btn, #csTbBody #pvTrack button { min-height: 44px; box-sizing: border-box; }
+
+/* ---------- onglets Infos / Armes / Sorts / Sac et économie d'action (combat-onglets.js) ----------
+   Tout est sous #csPj (caché hors Simplifié) : le mode Complet ne reçoit aucune de ces règles. Couleurs = jetons de style.css (clair et sombre). */
+#csPj { --cs-stick: calc(var(--pbarH, 0px) + var(--pvtH, 0px)); }
+#csTbBody #csPj { --cs-stick: 0px; }
+#csPj .cs-in { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+#csPj .cs-sticky { position: sticky; top: var(--cs-stick); z-index: 4; display: flex; flex-direction: column; gap: 6px; padding: 6px 0; background: var(--surface); border-bottom: 1px solid var(--line); }
+#csPj .cs-sticky .cs-pj-eco { flex-wrap: nowrap; gap: 6px; }
+#csPj .cs-sticky .cs-pj-eco .cs-eco { flex: 1 1 0; min-height: 52px; }
+#csPj .cs-tabs { display: flex; gap: 4px; }
+#csPj .cs-tab { flex: 1 1 0; min-width: 44px; min-height: 48px; padding: 0 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); color: var(--ink); font: inherit; font-size: 1rem; font-weight: 600; cursor: pointer; touch-action: manipulation; }
+#csPj .cs-tab[aria-selected="true"] { background: var(--brass-soft); border-color: var(--brass); box-shadow: inset 0 -3px 0 var(--brass); color: var(--ink); }
+#csPj .cs-tab:focus-visible, #csPj .cs-panel:focus-visible, #csPj .cs-sw:focus-visible { outline: 3px solid var(--brass); outline-offset: 2px; }
+#csPj .cs-status { margin: 0; font-size: .95rem; min-height: 0; overflow-wrap: anywhere; }
+#csPj .cs-status:empty { display: none; }
+#csPj .cs-note-t { font-weight: 700; }
+#csPj .cs-last { color: var(--muted); }
+#csPj .cs-panel { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+#csPj .cs-panel[hidden] { display: none !important; }
+#csPj .cs-note { margin: 0; }
+
+/* pastille de type : le texte porte le sens, la couleur seulement l'appui */
+#csPj .cs-ty { display: inline-block; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line-strong, var(--line)); background: var(--surface-2); color: var(--ink); font-size: .875rem; font-weight: 700; line-height: 1.4; vertical-align: middle; }
+#csPj .cs-ty-a { border-color: var(--pj); }
+#csPj .cs-ty-b { border-color: var(--brass); background: var(--brass-soft); }
+#csPj .cs-ty-r { border-color: var(--mj); }
+#csPj .cs-ty-g { border-color: var(--ok); }
+#csPj .cs-tag { display: inline-block; padding: 1px 8px; border-radius: 6px; border: 1px dashed var(--line-strong, var(--line)); font-size: .875rem; }
+
+/* listes (sorts, sac) */
+#csPj .cs-grp h3 { margin: 6px 0 6px; }
+#csPj .cs-grp h3 small { font-family: inherit; font-size: .875rem; font-weight: 400; }
+#csPj .cs-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+#csPj .cs-row { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); min-width: 0; }
+#csPj .cs-row.cs-off { background: var(--surface-2); }
+#csPj .cs-rn { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 1.05rem; overflow-wrap: anywhere; }
+#csPj .cs-ri { font-size: .95rem; color: var(--muted); overflow-wrap: anywhere; }
+#csPj .cs-rs { font-size: .95rem; overflow-wrap: anywhere; }
+#csPj .cs-rb { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+#csPj .cs-qty { font-weight: 700; font-variant-numeric: tabular-nums; }
+#csPj .cs-sl { display: inline-flex; align-items: center; gap: 6px; font-size: .95rem; }
+#csPj .cs-sl select { min-height: 44px; min-width: 76px; box-sizing: border-box; font: inherit; font-size: 1rem; border-radius: 10px; border: 1px solid var(--line-strong, var(--line)); background: var(--surface); color: var(--ink); padding: 0 8px; }
+#csPj .cs-rb .cs-pj-b { flex: 0 0 auto; padding: 0 14px; min-width: 96px; }
+#csPj .cs-sw { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: .95rem; cursor: pointer; touch-action: manipulation; }
+#csPj .cs-sw i { position: relative; width: 36px; height: 20px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line-strong, var(--line)); flex: none; }
+#csPj .cs-sw i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); }
+#csPj .cs-sw[aria-checked="true"] i { background: var(--brass-soft); border-color: var(--brass); }
+#csPj .cs-sw[aria-checked="true"] i::after { left: 18px; background: var(--brass); }
+
+/* contrôle grisé : disabled + aria-disabled, avec la raison écrite (jamais la couleur seule) */
+#csPj .cs-act { flex-direction: column; gap: 0; line-height: 1.15; }
+#csPj .cs-act.cs-off, #csPj .cs-pj-b[disabled] { opacity: .6; background: var(--surface-2); border-style: dashed; color: var(--muted); cursor: not-allowed; }
+#csPj .cs-act .cs-why, #csPj .cs-why { display: block; font-size: .875rem; font-weight: 400; color: var(--muted); }
+#csPj .cs-pj-weap li { align-items: flex-start; }
+#csPj .cs-pj-wn b { margin-right: 4px; }
+
+/* suivi des ressources déplacé dans l'onglet Infos : contenu complet (le résumé replié est remplacé), cibles >= 44 px, texte >= 14 px */
+#csPj #pvTrack { margin: 0; box-shadow: none; }
+#csPj #pvTrack.pvt-fold > .pvtsum { display: none; }
+#csPj #pvTrack.pvt-fold > h2 { display: block; }
+#csPj #pvTrack.pvt-fold:not(.pvt-open) > :not(.pvtsum) { display: revert; }
+#csPj #pvTrack.pvt-fold:not(.pvt-open) { padding-block: revert; }
+#csPj #pvTrack .tkl button, #csPj #pvTrack .tkrest .btn, #csPj #pvTrack .tkctr .btn, #csPj #pvTrack .tkconc .btn, #csPj #pvTrack .tkadd .btn, #csPj #pvTrack .tkadd button { min-height: 44px; min-width: 44px; }
+#csPj #pvTrack .tkl.cs-off { opacity: .6; }
+#csPj #pvTrack .cs-ty-tk { margin-left: 6px; }
+#csPj #pvTrack .tkl .tkv, #csPj #pvTrack .tksum, #csPj #pvTrack details.tkadd > summary, #csPj #pvTrack details.tkadd label, #csPj #pvTrack .hint, #csPj #pvTrack .tk .muted { font-size: .875rem; }
+#csPj #pvTrack details.tkadd > summary { min-height: 44px; display: flex; align-items: center; }
+#csPj #pvTrack input:not([type="checkbox"]):not([type="radio"]), #csPj #pvTrack select { min-height: 44px; box-sizing: border-box; }
+
+/* large : pastilles et onglets sur une seule ligne (le volet latéral, étroit, passe à la ligne tout seul) */
+@media (min-width: 700px) {
+  #csPj .cs-sticky { flex-direction: row; flex-wrap: wrap; align-items: stretch; }
+  #csPj .cs-sticky .cs-pj-eco { flex: 1 1 320px; }
+  #csPj .cs-sticky .cs-tabs { flex: 1 1 340px; }
+  #csPj .cs-sticky .cs-status { flex: 1 1 100%; }
+}

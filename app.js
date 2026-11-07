@@ -13573,6 +13573,15 @@ rescrub: function () { if (csMustLave() && !csLave && csPlayerApply()) render();
 stateAt: function () { return csRawAt; },
 viewChanged: function () { if (csPlayerApply() && !loaded) { loaded = true; setSync('shared'); } render(); },
 weapons: function (vc) { var c = myC() || (vc ? normalize({ combatants: [vc] }).combatants[0] : null); if (!c) return []; var raw = atksFor(c); if (!raw.length) { var e0 = myEntry(), xa = e0 && e0.x && Array.isArray(e0.x.atk) ? e0.x.atk : []; return xa.slice(0, 12).map(function (a) { return { n: String(a.n || 'Arme').slice(0, 60), b: int(a.b, 0), parts: parseDmg(String(a.d || '') + ' ' + String(a.t || '')) }; }); } return raw.map(function (x, i) { var L = atkLbl(c, x, i); return { n: x.n, b: L.b, parts: (L.parts || []).map(function (z) { return { d: z.d, t: z.t || '' }; }) }; }); }
+/* onglets Sorts / Sac du panneau « Mon combat » (combat-onglets.js, combat-joueuse.js) : points d'entrée vers les fonctions existantes (sorts de la fiche, emplacements, équipement) */
+, spells: function () { return pvMySpells(); },
+castCheck: function (r, slot) { var e = myEntry(); return e ? tkCast(e, r, slot, true).err : 'Fiche introuvable.'; },
+cast: function (r, slot) { var e = myEntry(); return e ? tkCast(e, r, slot) : { err: 'Fiche introuvable.', replaced: '' }; },
+castInfo: function (r, slot) { var e = myEntry(); if (!e) return null; var cf = castFor(e, spellAb(r, e)), sv = cast, parts = []; cast = cf; try { parts = spellParts(r, slot); } finally { cast = sv; } return { parts: parts, atk: cf.atk, dc: cf.dc, heal: !!r.hd }; },
+slotInfo: function () { var e = myEntry(); if (!e || !tkOK(e)) return null; var s = tkSlots(e), u = tkUse(e); return { n: s.slots.length, pact: s.pact ? s.pact.lvl : 0, max: s.slots.slice(), left: s.slots.map(function (mx, i) { return Math.max(0, mx - int(u.sl[i + 1], 0)); }) }; },
+bag: function () { var e = myEntry(), x = e && e.x; return { text: String((x && x.equip) || ''), over: x && x.bagt && typeof x.bagt === 'object' && !Array.isArray(x.bagt) ? x.bagt : {} }; },
+bagSet: function (text, over) { var e = myEntry(); if (!e) return false; e.x = e.x || {}; if (text != null) e.x.equip = String(text).slice(0, 4000); if (over) e.x.bagt = over; libSave(e); if (libCol) render(); return true; },
+extra: function () { var c = myC(); return c ? extraAtk(c) : 1; }
 });
 } catch (e) { /* ignoré */ }
 try {
