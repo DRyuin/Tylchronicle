@@ -9717,7 +9717,7 @@ h += '<h3>Étapes</h3>' + m.steps.map(function (s) {
 var ok = !!ms.done[s[0]], extra = '';
 if (s[3] === 'coque') {
 var cost = ms.conv ? 8000 : 15000;
-extra = '<div class="cppay"><label class="chk"><input type="checkbox" data-cpc="conv" data-p="' + m.k + '"' + (ms.conv ? ' checked' : '') + '> Kaelen convaincu (8 000 po)</label>' +
+extra = '<div class="cppay"><label class="chk"><input type="checkbox" data-cpc="conv" data-p="' + m.k + '"' + (ms.conv ? ' checked' : '') + '> PNJ convaincu (8 000 po)</label>' +
 (ms.paid ? '<span class="hint">Payé.</span>' : cpBtn('Payer ' + cpFmt(cost) + ' po sur la caisse', 'payCoque', m.k, cpS.t.gold < cost ? '' : 'primary')) +
 (!ms.paid && cpS.t.gold < cost ? '<span class="hint err">Caisse insuffisante (' + cpFmt(cpS.t.gold) + ' po).</span>' : '') + '</div>';
 }
@@ -9915,7 +9915,7 @@ else if (a === 'mis') { cpMis = p[0]; cpRender(); }
 else if (a === 'adv') cpEdit(function () { cpAdvance(int(p[0], 1)); });
 else if (a === 'clkStart') cpEdit(function () { cpM(p[0]).start = cpS.day; });
 else if (a === 'clkStop') cpEdit(function () { cpM(p[0]).start = null; });
-else if (a === 'payCoque') cpEdit(function () { var ms = cpM(p[0]), cost = ms.conv ? 8000 : 15000; if (ms.paid || cpS.t.gold < cost) return; ms.paid = true; ms.done.n6 = true; cpLed(-cost, 'Coque renforcée (Kaelen Vent-Noir)'); });
+else if (a === 'payCoque') cpEdit(function () { var ms = cpM(p[0]), cost = ms.conv ? 8000 : 15000; if (ms.paid || cpS.t.gold < cost) return; ms.paid = true; ms.done.n6 = true; cpLed(-cost, 'Coque renforcée'); });
 else if (a === 'gAdd') {
 var amt = cpNum(($('cpAmt') || {}).value, 0), why = String((($('cpWhy') || {}).value) || '').trim();
 if (!amt) return;
