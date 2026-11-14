@@ -13603,7 +13603,7 @@ spells: renderPvSpells, render: render,
 /* vue MJ des decks (decks-mj.js) : fiches PJ, classes lanceuses, niveaux de sorts */
 pjs: function () { return lib.filter(function (e) { return hasTag(e, 'PJ') && e.x; }); }, byId: libById, code: function (n) { return CLASS_CODE[n] || ''; },
 cap: function (n, lv) { var c = classByName(/^Druide/.test(n) ? 'Druide' : n); return c ? spellCounts(c, lv, 0).slots.length : 9; },
-ed: { levels: classesFromX, ents: spedEnts, ok: spedOk, model: spedModel, lock: spedLock, entOf: spedEnt, norm: spedNorm, over: spedOver, draft: spedD, setDraft: function (id, d) { SPED[id] = d; }, put: spedPut, save: spedSave, ui: spedU, refresh: spedRefresh, rest: function (e) { return tkUse(e).lr; }, mine: function (e, r) { return spHas(e, r); } }
+ed: { levels: classesFromX, ents: spedEnts, ok: spedOk, onList: spedOnList, model: spedModel, lock: spedLock, entOf: spedEnt, norm: spedNorm, over: spedOver, draft: spedD, setDraft: function (id, d) { SPED[id] = d; }, put: spedPut, save: spedSave, ui: spedU, refresh: spedRefresh, rest: function (e) { return tkUse(e).lr; }, mine: function (e, r) { return spHas(e, r); } }
 });
 } catch (e) { /* ignoré */ }
 initStorage();

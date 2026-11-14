@@ -4,13 +4,12 @@
      réglage « libre » pour elle seule, retirer une proposition ou une imposition.
    - Modèles maison (decks/cfg.modeles) : classe, niveau minimum, thème, sorts, note <= 140.
    Droits (migration 021) : le MJ écrit m_<pid> et cfg en entier (set), p_<pid> par fusion (update). Anti-rebond 1 s par document, jamais d'écriture en rafale.
-   Rien n'est visible tant que decks/cfg n'existe pas, sauf si le MJ ouvre le site avec « #decks » dans l'adresse (une fois : mémorisé). */
+   Le panneau est toujours visible pour le MJ (sous « Joueuses ») ; rien n'est créé tant qu'il ne coche pas « Activer les decks pour les joueuses ». « #decks » dans l'adresse reste accepté, sans être nécessaire. */
 (function (root) {
   'use strict';
   var T = root.tylDK, doc = root.document;
   if (!T || !T.x || !doc) return;
   var X = T.x, LIM = T.LIM, THEMES = T.THEMES, THEME_LBL = T.THEME_LBL, CLASSES = T.CLASSES;
-  var FLAG = 'tylchronicle-decks-mj';
   var MS = { open: false, view: 'player', pid: '', pu: null, mu: null, p: T.cleanDoc(null), pRaw: null, pLoaded: false, mLoaded: false, m: T.cleanM(null), mRaw: null, draft: null, mode: '', ask: null, msg: '', err: false, q: '', lv: -1, opener: null, cfgLocal: null, sig: '' };
   var Q = {}, rootEl = null, panSig = '';
 
@@ -20,8 +19,6 @@
   function keys(o) { return isObj(o) ? Object.keys(o) : []; }
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
   function fold(s) { s = String(s == null ? '' : s).toLowerCase(); try { s = s.normalize('NFD'); } catch (e) { /* ancien navigateur */ } return s.replace(/[̀-ͯ]/g, ''); }
-  function flagOn() { try { return localStorage.getItem(FLAG) === '1'; } catch (e) { return false; } }
-  function setFlag() { try { localStorage.setItem(FLAG, '1'); } catch (e) { /* ignoré */ } }
   function isMj() { return X.role() === 'mj'; }
   function cfgNow() { return MS.cfgLocal || T.cleanCfg(X.S.cfg); }
   function setMsg(t, err) { MS.msg = t || ''; MS.err = !!err; }
@@ -105,10 +102,10 @@
   }
 
   /* ---------- panneau de la colonne MJ ---------- */
-  function panelVisible() { return isMj() && (!!X.S.cfg || flagOn()); }
+  function panelVisible() { return isMj(); }   /* toujours visible pour le MJ : plus besoin de « #decks » ; rien n'est écrit tant qu'il ne coche pas */
   function panelHTML() {
     var c = cfgNow(), ps = players(), nm = keys(c.modeles).length, dis = cfgReady() ? '' : ' disabled';
-    return '<label class="dkm-sw"><input type="checkbox" data-dkm-f="actif"' + (c.actif ? ' checked' : '') + dis + '><span>Decks de sorts activés pour les joueuses<small>Fait apparaître « Mes decks » chez elles.</small></span></label>' +
+    return '<label class="dkm-sw"><input type="checkbox" data-dkm-f="actif"' + (c.actif ? ' checked' : '') + dis + '><span>Activer les decks pour les joueuses<small>Coché, chaque joueuse voit « Mes decks » dans son onglet Sorts ; décoché, elle ne voit rien.</small></span></label>' +
       '<label class="dkm-sw"><input type="checkbox" data-dkm-f="libre"' + (c.libre ? ' checked' : '') + dis + '><span>Changer de deck librement<small>Éteint : après un repos long, ou avec ta confirmation. Réglable aussi joueuse par joueuse.</small></span></label>' +
       (ps.length ? '<ul class="dkm-pl">' + ps.map(function (p) { return '<li><span class="dkm-pn">' + esc(p.name) + ' <small>' + esc(p.cls.map(function (c0) { return c0.n + ' ' + c0.lv; }).join(', ')) + '</small></span><button type="button" class="dk-btn" data-dkm-a="player" data-dkm-pid="' + esc(p.id) + '">Decks</button></li>'; }).join('') + '</ul>' : '<p class="dk-meta">Aucune joueuse avec des sorts pour l\'instant.</p>') +
       '<button type="button" class="dk-btn" data-dkm-a="models">Decks suggérés du MJ (' + nm + ' / ' + LIM.modeles + ')</button><p class="dkm-st" role="status" aria-live="polite" id="dkmSt">' + (!MS.open && MS.msg ? esc(MS.msg) : '') + '</p>';
@@ -122,9 +119,12 @@
       pan = doc.createElement('details'); pan.id = 'dkMjPanel'; pan.className = 'panel dkm-panel';
       pan.innerHTML = '<summary>Decks de sorts</summary><div class="pbody stack" id="dkMjBody"></div>';
       host.parentNode.insertBefore(pan, host.nextSibling);
+      pan.open = !(cfgReady() && cfgNow().actif);   /* tant que les decks ne sont pas activés, le panneau est ouvert : l'interrupteur se voit */
+      pan.addEventListener('toggle', function () { if (pan.__dkAuto) { pan.__dkAuto = false; return; } pan.__dkTouched = true; });
       pan.addEventListener('click', onClick); pan.addEventListener('change', onChange);
     }
     pan.hidden = false; body = doc.getElementById('dkMjBody');
+    if (!pan.__dkReady && cfgReady()) { pan.__dkReady = true; if (cfgNow().actif && pan.open && !pan.__dkTouched) { pan.__dkAuto = true; pan.open = false; } }   /* decks déjà activés : panneau replié comme avant */
     sig = panelHTML();
     if (sig === panSig) return;
     var a = doc.activeElement, key = a && pan.contains(a) ? (a.getAttribute('data-dkm-f') ? '[data-dkm-f="' + a.getAttribute('data-dkm-f') + '"]' : a.getAttribute('data-dkm-pid') ? '[data-dkm-pid="' + a.getAttribute('data-dkm-pid') + '"]' : a.getAttribute('data-dkm-a') ? '[data-dkm-a="' + a.getAttribute('data-dkm-a') + '"]' : '') : '';
@@ -202,17 +202,25 @@
   function fromModel(m, classe) { return { kind: 'deck', id: '', nom: m.nom, note: m.note || '', theme: m.theme || 'autre', classe: classe || m.classe, min: m.min, sorts: (m.sorts || []).slice(), favoris: [] }; }
 
   /* ---------- sorts permis pour le brouillon ---------- */
+  function specOf(dr) {
+    var h = H(), e = dr.kind === 'deck' ? h.byId(MS.pid) : null, cl = e ? X.clsOf(e, dr.classe) : null, code = h.code ? h.code(dr.classe) : '';
+    if (cl) return { cls: cl.n, maxL: cl.maxL, alw: cl.alw, cant: false, listed: function (r) { return h.ed.onList(cl.en, r); } };
+    return { cls: dr.classe, maxL: maxLvl(dr), alw: [], cant: false, listed: function (r) { return !!code && String(r.cl || '').indexOf(code) >= 0 && !r.hb; } };
+  }
   function poolRows(dr) {
-    var h = H(), e = dr.kind === 'deck' ? h.byId(MS.pid) : null, cl = e ? X.clsOf(e, dr.classe) : null, code = h.code ? h.code(dr.classe) : '', cap = 9, q = fold(MS.q).trim();
-    if (dr.kind === 'model') { try { cap = h.cap(dr.classe, dr.min); } catch (er) { cap = 9; } }
-    return h.sp().filter(function (r) {
-      if (r.l < 1) return false;
-      if (cl) { if (cl.alw.indexOf(r.e) >= 0 || !h.ed.ok(cl.en, r)) return false; }
-      else if (!code || String(r.cl || '').indexOf(code) < 0 || r.l > cap) return false;
+    var q = fold(MS.q).trim(), spec = specOf(dr);
+    spec.cant = MS.lv === 0 || (MS.lv < 0 && !!q);
+    return X.classRows(spec).filter(function (it) {
+      var r = it.r;
       if (MS.lv >= 0 && r.l !== MS.lv) return false;
       if (q && fold(r.n + ' ' + r.e).indexOf(q) < 0) return false;
       return true;
-    }).sort(function (a, b) { return a.l - b.l || a.n.localeCompare(b.n, 'fr'); });
+    });
+  }
+  function topLvl(dr) {
+    var h = H(), e = dr.kind === 'deck' ? h.byId(MS.pid) : null, cl = e ? X.clsOf(e, dr.classe) : null, code = h.code ? h.code(dr.classe) : '', mx = 0;
+    h.sp().forEach(function (r) { if (r.l > mx && ((cl && (h.ed.onList(cl.en, r) || cl.alw.indexOf(r.e) >= 0)) || (!cl && code && String(r.cl || '').indexOf(code) >= 0 && !r.hb))) mx = r.l; });
+    return mx;
   }
   function maxLvl(dr) {
     var h = H(), e = dr.kind === 'deck' ? h.byId(MS.pid) : null, cl = e ? X.clsOf(e, dr.classe) : null;
@@ -222,7 +230,11 @@
   function toggleSpell(dr, sid) {
     var i = dr.sorts.indexOf(sid);
     if (i >= 0) dr.sorts.splice(i, 1);
-    else { if (dr.sorts.length >= LIM.sorts) { setMsg('Un deck contient ' + LIM.sorts + ' sorts au plus.', true); return; } dr.sorts.push(sid); }
+    else {
+      var okAdd = X.classRows(specOf(dr)).some(function (it) { return it.r.e === sid && it.st === 'ok'; });
+      if (!okAdd) { setMsg('Ce sort n\'est pas ajoutable (niveau requis plus haut ou toujours préparé).', true); return; }
+      if (dr.sorts.length >= LIM.sorts) { setMsg('Un deck contient ' + LIM.sorts + ' sorts au plus.', true); return; } dr.sorts.push(sid);
+    }
   }
 
   /* ---------- composer ---------- */
@@ -261,33 +273,28 @@
     return h;
   }
   function pickHTML() {
-    var dr = MS.draft, mx, i, h, rows, cap = 120;
+    var dr = MS.draft, mx, i, h;
     if (!dr) return backBtn();
-    mx = maxLvl(dr);
+    mx = topLvl(dr);
     h = '<h3 class="dk-h3">Ajouter des sorts à « ' + esc(dr.nom || 'ce deck') + ' »</h3><p><span class="dk-count" aria-live="polite">Sorts : <b>' + dr.sorts.length + '</b></span></p>' +
       '<input type="search" class="dk-q" data-dkm-f="q" value="' + esc(MS.q) + '" placeholder="Chercher un sort" aria-label="Chercher un sort" autocomplete="off">' +
-      '<div class="dk-chips" role="group" aria-label="Niveau"><button type="button" class="dk-chip' + (MS.lv < 0 ? ' on' : '') + '" data-dkm-lv="-1" aria-pressed="' + (MS.lv < 0) + '">Tous</button>';
+      '<div class="dk-chips" role="group" aria-label="Niveau"><button type="button" class="dk-chip' + (MS.lv < 0 ? ' on' : '') + '" data-dkm-lv="-1" aria-pressed="' + (MS.lv < 0) + '">Tous</button><button type="button" class="dk-chip' + (MS.lv === 0 ? ' on' : '') + '" data-dkm-lv="0" aria-pressed="' + (MS.lv === 0) + '">Mineurs</button>';
     for (i = 1; i <= mx; i++) h += '<button type="button" class="dk-chip' + (MS.lv === i ? ' on' : '') + '" data-dkm-lv="' + i + '" aria-pressed="' + (MS.lv === i) + '">Niv. ' + i + '</button>';
     h += '</div>';
     if (MS.msg) h += '<p class="dk-msg' + (MS.err ? ' err' : '') + '" role="status">' + esc(MS.msg) + '</p>';
-    h += '<ul class="dk-list" id="dkmPickList">' + pickRows(dr, cap) + '</ul><div class="dk-btns dk-end"><button type="button" class="dk-btn primary" data-dkm-a="pickdone">Terminé</button></div>';
+    h += '<ul class="dk-list" id="dkmPickList">' + pickRows(dr) + '</ul><div class="dk-btns dk-end"><button type="button" class="dk-btn primary" data-dkm-a="pickdone">Terminé</button></div>';
     return h;
   }
-  function pickRows(dr, cap) {
-    var rows = poolRows(dr), h;
-    if (!rows.length) return '<li class="dk-empty">Aucun sort ne correspond.</li>';
-    h = rows.slice(0, cap).map(function (r) {
-      var on = dr.sorts.indexOf(r.e) >= 0;
-      return '<li class="dk-row' + (on ? ' on' : '') + '" data-dk-s="' + esc(r.e) + '"><div class="dk-rn"><b>' + esc(r.n) + '</b><span class="dk-tags">' + X.tagsOf(r) + '</span></div><button type="button" class="dk-btn dk-pk' + (on ? ' primary' : '') + '" data-dkm-a="pick" data-dkm-s="' + esc(r.e) + '" aria-pressed="' + on + '">' + (on ? '✓ Dans le deck' : '+ Ajouter') + '<span class="dk-sr"> ' + esc(r.n) + '</span></button></li>';
-    }).join('');
-    if (rows.length > cap) h += '<li class="dk-empty">' + (rows.length - cap) + ' autres sorts : affine la recherche.</li>';
-    return h;
+  function pickRows(dr) {
+    var sig = [MS.q, MS.lv, MS.pid, dr.classe, dr.kind, dr.min].join('|');
+    if (sig !== MS.pgSig) { MS.pgSig = sig; MS.pg = 1; }
+    return X.listHTMLItems(poolRows(dr), (MS.pg || 1) * 60, 'dkm', function (id) { return dr.sorts.indexOf(id) >= 0; }, null);
   }
   function fillPick() {
     var ul = rootEl && rootEl.querySelector('#dkmPickList'), c = rootEl && rootEl.querySelector('.dk-count');
     if (!ul || !MS.draft) return;
     var fa = doc.activeElement, fk = fa && ul.contains(fa) && fa.getAttribute ? fa.getAttribute('data-dkm-s') : '', i, nb;
-    ul.innerHTML = pickRows(MS.draft, 120);
+    ul.innerHTML = pickRows(MS.draft);
     if (fk) { nb = ul.querySelectorAll('[data-dkm-a="pick"]'); for (i = 0; i < nb.length; i++) if (nb[i].getAttribute('data-dkm-s') === fk) { try { nb[i].focus(); } catch (e) { /* ignoré */ } break; } }   /* le focus clavier ne retombe pas sur body */
     if (c) c.innerHTML = 'Sorts : <b>' + MS.draft.sorts.length + '</b>';
   }
@@ -420,7 +427,11 @@
     MS.m.impose[id] = d;
     qPut('p_' + MS.pid, 'update', patch);
     putM(MS.pid);
-    setMsg('Deck « ' + d.nom + ' » imposé à ' + p.name + ' : ' + (cl.mode === 'prep' ? 'équipé sur sa fiche (' + plural(keep.length, 'sort préparé', 'sorts préparés') + ').' : 'activé comme raccourci.') + (tr && tr.drop.length ? ' ' + plural(tr.drop.length, 'sort retiré', 'sorts retirés') + ' (au-dessus de sa limite).' : ''), false);
+    setMsg('Deck « ' + d.nom + ' » imposé à ' + p.name + ' : ' + (cl.mode === 'prep' ? 'équipé sur sa fiche (' + plural(keep.length, 'sort préparé', 'sorts préparés') + ').' : 'activé comme raccourci.') + (tr && tr.drop.length ? ' ' + plural(tr.drop.length, 'sort retiré', 'sorts retirés') + ' (au-dessus de sa limite).' : '') + (function () {
+      var unk = 0, Mm; if (cl.mode !== 'known') return '';
+      try { Mm = H().ed.model(e); keep.forEach(function (id) { if (!Mm.mine[id]) unk++; }); } catch (er) { return ''; }
+      return unk ? ' Attention : ' + plural(unk, 'sort du deck n\'est pas encore connu', 'sorts du deck ne sont pas encore connus') + ' d\'elle, sa liste filtrée ne les montre pas.' : '';
+    })(), false);
     return true;
   }
   function saveModel(dr) {
@@ -452,7 +463,8 @@
       if (found) { MS.draft = fromModel(found, found.classe); var clm = p0 && X.clsOf(p0.e, found.classe); if (clm) MS.draft.sorts = X.legalIds(clm, MS.draft.sorts); MS.msg = ''; go('compose'); }   /* sorts toujours préparés (domaine, serment) : hors deck */
       return;
     }
-    if (a === 'addspells') { MS.q = ''; MS.lv = -1; MS.msg = ''; go('pick'); return; }
+    if (a === 'addspells') { MS.q = ''; MS.lv = -1; MS.pg = 1; MS.msg = ''; go('pick'); return; }
+    if (a === 'more') { MS.pg = (MS.pg || 1) + 1; fillPick(); var nm0 = rootEl.querySelector('#dkmPickList [data-dkm-a="more"]'); if (nm0) { try { nm0.focus(); } catch (e0) { /* ignoré */ } } return; }
     if (a === 'pickdone') { MS.msg = ''; go('compose'); return; }
     if (a === 'pick' && dr) { toggleSpell(dr, sid); fillPick(); if (MS.msg) render(); return; }
     if (a === 'rm' && dr) { toggleSpell(dr, sid); render(); return; }
@@ -522,7 +534,7 @@
   doc.addEventListener('keydown', onKey);
 
   /* ---------- démarrage : panneau visible selon decks/cfg (ou « #decks » une fois) ---------- */
-  function hashCheck() { try { if (/decks/i.test(root.location.hash || '') && isMj()) { setFlag(); panSig = ''; refresh(); } } catch (e) { /* ignoré */ } }
+  function hashCheck() { try { if (/decks/i.test(root.location.hash || '') && isMj()) { panSig = ''; refresh(); var pn = doc.getElementById('dkMjPanel'); if (pn && !pn.open) pn.open = true; } } catch (e) { /* ignoré */ } }   /* « #decks » reste accepté (ouvre le panneau), mais n'est plus nécessaire */
   T.onCfg.push(function () { panSig = ''; refresh(); });
   if (root.addEventListener) root.addEventListener('hashchange', hashCheck);
   root.setInterval(function () { if (isMj()) { try { ensurePanel(); } catch (e) { /* ignoré */ } } }, 2500);

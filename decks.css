@@ -103,3 +103,13 @@ html.dk-lock { overflow: hidden; }
   .dk-btns > .dk-btn { flex: 0 1 auto; }
 }
 @media (prefers-reduced-motion: reduce) { .dk, .dk * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+
+/* retours d'usage : sélecteur complet (sorts au-dessus du niveau grisés, « Afficher plus »), état « sur ta fiche » */
+.dk-row.dk-locked { background: var(--surface-2); border-style: dashed; }
+.dk-row.dk-locked .dk-rn b { color: var(--muted); font-weight: 600; }
+.dk-lockt { font-size: .9375rem; font-weight: 600; color: var(--muted); }
+.dk-found { list-style: none; color: var(--muted); font-size: .9375rem; padding: 2px 2px 4px; }
+.dk-more { list-style: none; display: flex; }
+.dk-more .dk-btn { flex: 1 1 auto; }
+.dk-sync { margin: 0; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--ok); background: var(--surface); font-size: .9375rem; }
+.dk-sync.dk-todo { border-color: var(--warn); background: var(--brass-soft); font-weight: 600; }

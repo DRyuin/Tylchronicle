@@ -334,7 +334,7 @@
   function btnHTML(ctx) {
     if (!available()) return '';
     var a = activeDeck();
-    return '<button type="button" class="dk-open" data-dk-open="' + esc(ctx || 'fiche') + '" aria-haspopup="dialog"><span aria-hidden="true">🃏</span> Mes decks' + (a ? '<span class="dk-open-a"> · ' + esc(a.nom) + '</span>' : '') + '</button>' + (ctx === 'cs' ? '' : filterBtn());
+    return '<button type="button" class="dk-open" data-dk-open="' + esc(ctx || 'fiche') + '" aria-haspopup="dialog"><span aria-hidden="true">🃏</span> Mes decks' + (a ? '<span class="dk-open-a"> · ' + esc(a.nom) + (todo(a) ? ' · à appliquer' : '') + '</span>' : '') + '</button>' + (ctx === 'cs' ? '' : filterBtn());
   }
   function filterBtn() {
     var d = activeDeck(), cl = d && clsOf(entry(), d.classe);
@@ -536,7 +536,11 @@
   function toggleSpell(d, sid) {
     var i = d.sorts.indexOf(sid), f;
     if (i >= 0) { d.sorts.splice(i, 1); f = d.favoris.indexOf(sid); if (f >= 0) d.favoris.splice(f, 1); }
-    else { if (d.sorts.length >= LIM.sorts) { setMsg('Un deck contient ' + LIM.sorts + ' sorts au plus.', true); return false; } d.sorts.push(sid); }
+    else {
+      var cl0 = clsOf(entry(), d.classe), r0 = spById(sid);
+      if (cl0 && r0 && (r0.l < 1 || r0.l > cl0.maxL || cl0.alw.indexOf(sid) >= 0)) { setMsg(r0.l > cl0.maxL ? r0.n + ' : niveau ' + needLv(cl0.n, r0.l) + ' requis.' : r0.n + ' : pas besoin de deck pour ce sort.', true); return false; }
+      if (d.sorts.length >= LIM.sorts) { setMsg('Un deck contient ' + LIM.sorts + ' sorts au plus.', true); return false; } d.sorts.push(sid);
+    }
     touch(d.id); return true;
   }
   function toggleFav(d, sid) {
@@ -570,8 +574,9 @@
     try { ed.refresh(e.id, '.sped-hd h3'); } catch (er2) { /* ignoré */ }
   }
   /* filtre de l'onglet Sorts (fiche et « Mon combat ») : seulement pour un deck ACTIF de classe à sorts connus, désactivable */
-  var FLT = 'tylchronicle-decks-filtre';
-  function filterOn() { try { return localStorage.getItem(FLT) !== '0'; } catch (e) { return true; } }
+  var FLT = 'tylchronicle-decks-filtre', FLT_ID = 'tylchronicle-decks-filtre-deck';
+  /* « Tous » est un choix fait POUR le deck actif du moment : un nouveau deck (équipé, imposé, relu) s'affiche toujours en « Deck actif » */
+  function filterOn() { try { if (localStorage.getItem(FLT) !== '0') return true; return localStorage.getItem(FLT_ID) !== S.doc.actif; } catch (e) { return true; } }
   function filterDeck() {
     var d = activeDeck(), cl = d && clsOf(entry(), d.classe);
     return d && cl && cl.mode === 'known' && filterOn() ? d : null;
@@ -597,7 +602,7 @@
     });
     return { nom: d.nom, on: on, set: set, fav: fav, rows: out };
   }
-  function setFilter(on) { try { localStorage.setItem(FLT, on ? '1' : '0'); } catch (e) { /* ignoré */ } paintBar(); applyFilter(); }
+  function setFilter(on) { try { localStorage.setItem(FLT, on ? '1' : '0'); localStorage.setItem(FLT_ID, on ? '' : String(S.doc.actif || '')); } catch (e) { /* ignoré */ } paintBar(); applyFilter(); }
   function rank(r) {
     var d = activeDeck(), set = {}, fav = {};
     if (!d || !r) return 1;
@@ -608,9 +613,37 @@
     var t = ev.target && ev.target.closest ? ev.target.closest('[data-dk-filter]') : null;
     if (!t) return;
     ev.preventDefault();
-    try { localStorage.setItem(FLT, filterOn() ? '0' : '1'); } catch (e) { /* ignoré */ }
-    paintBar(); applyFilter();
+    setFilter(!filterOn());
   });
+
+  /* ----- état du deck actif par rapport à la fiche : l'effet doit se VOIR ----- */
+  function plural(n, a, b) { return n + ' ' + (n > 1 ? b : a); }
+  function sheetState(d) {
+    var e = entry(), cl = d && clsOf(e, d.classe), M, p, cur = {}, st = { cl: cl, add: [], del: [], keep: [], same: true };
+    if (!e || !cl || cl.mode !== 'prep') return st;
+    M = H.ed.model(e); p = planEquip(d); st.keep = p.keep || [];
+    H.sp().forEach(function (r) {   /* même règle que sheetEquip : les sorts verrouillés (domaine, MJ, notés ailleurs) ne comptent pas */
+      if (r.l < 1 || !M.mine[r.e] || cl.alw.indexOf(r.e) >= 0 || H.ed.lock(M, r)) return;
+      var en2 = H.ed.entOf(M, r, cl.n); if (en2 && en2.n === cl.n) cur[r.e] = 1;
+    });
+    st.keep.forEach(function (id) { if (!cur[id]) st.add.push(id); });
+    Object.keys(cur).forEach(function (id) { if (st.keep.indexOf(id) < 0) st.del.push(id); });
+    st.same = !st.add.length && !st.del.length;
+    return st;
+  }
+  function syncHTML(d) {
+    var a = activeDeck(), st, ks;
+    if (!a || !d || a.id !== d.id) return '';
+    st = sheetState(d);
+    if (!st.cl) return '';
+    if (st.cl.mode === 'known') {
+      ks = knownOf(d);
+      return '<p class="dk-sync" role="status">Raccourci actif : ' + plural(ks.connus.length, 'sort du deck est affiché', 'sorts du deck sont affichés') + ' dans ta liste de sorts' + (ks.aApprendre.length + ks.perdus.length ? ', ' + plural(ks.aApprendre.length + ks.perdus.length, 'pas encore connu', 'pas encore connus') : '') + '.</p>';
+    }
+    if (st.same) return '<p class="dk-sync" role="status">✔ Équipé sur ta fiche : ' + plural(st.keep.length, 'sort préparé', 'sorts préparés') + '.</p>';
+    return '<p class="dk-sync dk-todo" role="status">À appliquer : ce deck n\'est pas encore sur ta fiche (' + (st.add.length ? '+' + plural(st.add.length, 'sort', 'sorts') : '') + (st.add.length && st.del.length ? ', ' : '') + (st.del.length ? '−' + plural(st.del.length, 'sort', 'sorts') : '') + '). Touche « Appliquer à ma fiche ».</p>';
+  }
+  function todo(d) { var st = d && sheetState(d); return !!st && !!st.cl && st.cl.mode === 'prep' && !st.same; }
 
   /* ----- équipement ----- */
   function legalIds(cl, ids) {
@@ -653,11 +686,16 @@
   function doEquip(d, keep) {
     var e = entry(), cl = clsOf(e, d.classe), r, locked;
     if (!e || !cl) { setMsg('Cette classe n\'est plus sur ta fiche.', true); return false; }
-    if (cl.mode === 'known') { S.doc.actif = d.id; touchMeta(); setMsg('Deck « ' + d.nom + ' » activé : il filtre tes sorts.', false); return true; }
+    if (cl.mode === 'known') {
+      var ks = knownState(d.sorts, H.ed.model(e).mine, isConseil(d));
+      S.doc.actif = d.id; touchMeta(); setFilter(true);
+      setMsg('Deck « ' + d.nom + ' » activé : ta liste de sorts affiche ' + plural(ks.connus.length, 'sort du deck', 'sorts du deck') + (ks.aApprendre.length + ks.perdus.length ? ' (' + plural(ks.aApprendre.length + ks.perdus.length, 'autre sort du deck n\'est pas encore connu', 'autres sorts du deck ne sont pas encore connus') + (ks.aApprendre.length ? ' : à apprendre' : '') + ')' : '') + '. Le bouton « Tous » les montre à nouveau.', false);
+      return true;
+    }
     r = sheetEquip(e, cl, keep);
     if (!r.ok) { setMsg(r.msg, true); return false; }
     locked = r.locked;
-    S.doc.actif = d.id; S.doc.eq = { deck: d.id, rev: d.rev || 0, lr: useLr(), at: now() }; touchMeta();
+    S.doc.actif = d.id; S.doc.eq = { deck: d.id, rev: d.rev || 0, lr: useLr(), at: now() }; touchMeta(); setFilter(true);
     setMsg('Deck « ' + d.nom + ' » équipé : ' + keep.length + ' sort' + (keep.length > 1 ? 's' : '') + ' préparé' + (keep.length > 1 ? 's' : '') + '.' + (locked.length ? ' ' + locked.length + ' sort' + (locked.length > 1 ? 's' : '') + ' noté' + (locked.length > 1 ? 's' : '') + ' ailleurs non touché' + (locked.length > 1 ? 's' : '') + '.' : ''), false);
     return true;
   }
@@ -710,9 +748,9 @@
     h += '<ul class="dk-cards">' + decks.map(function (d) {
       var cl = clsOf(e, d.classe), on = act && act.id === d.id;
       return '<li class="dk-card' + (on ? ' on' : '') + '" data-dk-id="' + esc(d.id) + '"><div class="dk-ct"><h3>' + esc(d.nom) + '</h3>' + (on ? '<span class="dk-pill">Actif</span>' : '') + '</div>' +
-        '<p class="dk-meta">' + esc(d.classe) + ' · niv. ' + d.niveau + ' · ' + esc(THEME_LBL[d.theme] || '') + '</p>' + (d.note ? '<p class="dk-note">' + esc(d.note) + '</p>' : '') + '<p>' + counter(d, cl) + '</p>' +
+        '<p class="dk-meta">' + esc(d.classe) + ' · niv. ' + d.niveau + ' · ' + esc(THEME_LBL[d.theme] || '') + '</p>' + (d.note ? '<p class="dk-note">' + esc(d.note) + '</p>' : '') + '<p>' + counter(d, cl) + '</p>' + (on ? syncHTML(d) : '') +
         '<div class="dk-btns"><button type="button" class="dk-btn" data-dk-a="edit" data-dk-id="' + esc(d.id) + '">Ouvrir</button>' +
-        '<button type="button" class="dk-btn' + (on ? '' : ' primary') + '" data-dk-a="equip" data-dk-id="' + esc(d.id) + '">' + (cl && cl.mode === 'known' ? 'Activer' : 'Équiper') + '</button>' +
+        '<button type="button" class="dk-btn' + (!on || todo(d) ? ' primary' : '') + '" data-dk-a="equip" data-dk-id="' + esc(d.id) + '">' + (on && todo(d) ? 'Appliquer à ma fiche' : cl && cl.mode === 'known' ? 'Activer' : 'Équiper') + '</button>' +
         '<button type="button" class="dk-btn" data-dk-a="dup" data-dk-id="' + esc(d.id) + '">Dupliquer</button>' +
         (act && !on ? '<button type="button" class="dk-btn" data-dk-a="cmp" data-dk-id="' + esc(d.id) + '">Comparer avec l\'actif</button>' : '') +
         '<button type="button" class="dk-btn danger" data-dk-a="del" data-dk-id="' + esc(d.id) + '">Supprimer</button></div></li>';
@@ -751,7 +789,7 @@
     d = acceptDeck(prop, nid, S.pid, Math.max(1, Math.min(20, cl.lv)), legal); n0 = prop.sorts.length - d.sorts.length;
     d.maj = now();
     S.doc.decks[nid] = d; S.dirty[nid] = 1; answer(id, 'ok'); persist(); schedule();
-    setMsg('Deck « ' + d.nom + ' » ajouté à tes decks (copie : tes autres decks ne changent pas).' + (n0 ? ' ' + n0 + ' sort' + (n0 > 1 ? 's' : '') + ' écarté' + (n0 > 1 ? 's' : '') + ' (pas légal' + (n0 > 1 ? 's' : '') + ' pour ta classe ou toujours préparé' + (n0 > 1 ? 's' : '') + ').' : ''), false);
+    setMsg('Deck « ' + d.nom + ' » ajouté à tes decks, pas encore équipé : touche « ' + (cl.mode === 'known' ? 'Activer' : 'Équiper') + ' » pour l\'appliquer à ta fiche (copie : tes autres decks ne changent pas).' + (n0 ? ' ' + n0 + ' sort' + (n0 > 1 ? 's' : '') + ' écarté' + (n0 > 1 ? 's' : '') + ' (pas légal' + (n0 > 1 ? 's' : '') + ' pour ta classe ou toujours préparé' + (n0 > 1 ? 's' : '') + ').' : ''), false);
   }
   function cmpHTML() {
     var A = S.doc.decks[UI.cmpA], B = S.doc.decks[UI.cmpB], others, ds, nm, sec;
@@ -861,7 +899,7 @@
     if (cl && cl.mode === 'known') ks = knownOf(d);
     d.sorts.forEach(function (id) { var r = spById(id), l = r ? r.l : 0; (byL[l] = byL[l] || []).push(id); });
     h = '<h3 class="dk-h3">' + esc(d.nom) + '</h3><p class="dk-meta">' + esc(d.classe) + ' · niv. ' + d.niveau + '</p>' +
-      '<p class="dk-active">' + (activeDeck() ? (activeDeck().id === d.id ? 'Ce deck est <b>actif</b>.' : 'Deck actif : <b>' + esc(activeDeck().nom) + '</b>') : 'Aucun deck actif.') + '</p>' +
+      '<p class="dk-active">' + (activeDeck() ? (activeDeck().id === d.id ? 'Ce deck est <b>actif</b>.' : 'Deck actif : <b>' + esc(activeDeck().nom) + '</b>') : 'Aucun deck actif.') + '</p>' + syncHTML(d) +
       '<label class="dk-lab">Nom<input type="text" data-dk-f="nom" maxlength="' + LIM.nom + '" value="' + esc(d.nom) + '" autocomplete="off"></label>' +
       '<label class="dk-lab">Note courte<input type="text" data-dk-f="note" maxlength="' + LIM.note + '" value="' + esc(d.note || '') + '" autocomplete="off" placeholder="pour tenir la ligne"></label>' +
       '<label class="dk-lab">Thème<select data-dk-f="theme">' + themeSel(d.theme) + '</select></label>' +
@@ -872,7 +910,7 @@
     if (UI.ask) h += askHTML();
     h += warnHTML(d);
     if (cl && cl.mode === 'known') h += knownHTML(d, cl, ks);
-    h += '<div class="dk-btns"><button type="button" class="dk-btn" data-dk-a="addspells">+ Ajouter des sorts</button>' + (cl && cl.mode === 'known' ? '<button type="button" class="dk-btn" data-dk-a="addknown">+ Ajouter mes sorts connus</button>' : '') + (activeDeck() && activeDeck().id === d.id ? '<button type="button" class="dk-btn" data-dk-a="unequip">Désactiver</button>' : '') + (activeDeck() && activeDeck().id !== d.id ? '<button type="button" class="dk-btn" data-dk-a="cmp" data-dk-id="' + esc(d.id) + '">Comparer avec l\'actif</button>' : '') + '<button type="button" class="dk-btn primary" data-dk-a="equip" data-dk-id="' + esc(d.id) + '">' + (cl && cl.mode === 'known' ? 'Activer' : 'Équiper') + '</button></div>';
+    h += '<div class="dk-btns"><button type="button" class="dk-btn" data-dk-a="addspells">+ Ajouter des sorts</button>' + (cl && cl.mode === 'known' ? '<button type="button" class="dk-btn" data-dk-a="addknown">+ Ajouter mes sorts connus</button>' : '') + (activeDeck() && activeDeck().id === d.id ? '<button type="button" class="dk-btn" data-dk-a="unequip">Désactiver</button>' : '') + (activeDeck() && activeDeck().id !== d.id ? '<button type="button" class="dk-btn" data-dk-a="cmp" data-dk-id="' + esc(d.id) + '">Comparer avec l\'actif</button>' : '') + '<button type="button" class="dk-btn primary" data-dk-a="equip" data-dk-id="' + esc(d.id) + '">' + (activeDeck() && activeDeck().id === d.id && todo(d) ? 'Appliquer à ma fiche' : cl && cl.mode === 'known' ? 'Activer' : 'Équiper') + '</button></div>';
     if (!d.sorts.length) h += '<p class="dk-empty">Aucun sort dans ce deck. Utilise « Ajouter des sorts ».</p>';
     Object.keys(byL).sort(function (a, b) { return a - b; }).forEach(function (l) {
       h += '<section class="dk-grp" aria-label="Niveau ' + l + '"><h4>Niveau ' + l + '</h4><ul class="dk-list">' + byL[l].map(function (id) {
@@ -888,12 +926,42 @@
 
   /* sélecteur de sorts */
   function incKind(r) { var t = fold(r.t); return /bonus/.test(t) ? 'bonus' : /reaction/.test(t) ? 'reaction' : /^1 action$/.test(t) ? 'action' : 'longue'; }
+  /* TOUS les sorts d'une classe, chacun avec son état : ok (ajoutable), lvl (niveau requis), alw (toujours préparé), cant (sort mineur). Partagé avec decks-mj.js. */
+  var PAGE = 60;
+  function needLv(n, L) { var lv; for (lv = 1; lv <= 20; lv++) { try { if (H.cap(n, lv) >= L) return lv; } catch (e) { return 0; } } return 0; }
+  function classRows(spec) {
+    var out = [];
+    H.sp().forEach(function (r) {
+      var alw = !!spec.alw && spec.alw.indexOf(r.e) >= 0;
+      if (!alw && !spec.listed(r)) return;
+      if (r.l === 0) { if (spec.cant) out.push({ r: r, st: 'cant', need: 0 }); return; }
+      out.push({ r: r, st: alw ? 'alw' : r.l > spec.maxL ? 'lvl' : 'ok', need: !alw && r.l > spec.maxL ? needLv(spec.cls, r.l) : 0 });
+    });
+    return out.sort(function (a, b) { return a.r.l - b.r.l || a.r.n.localeCompare(b.r.n, 'fr'); });
+  }
+  function lockTxt(it) { return it.st === 'lvl' ? 'Niveau ' + (it.need || 'supérieur') + ' requis' : it.st === 'alw' ? 'Toujours préparé : hors deck' : it.st === 'cant' ? 'Sort mineur : toujours disponible, hors deck' : ''; }
+  /* une ligne du sélecteur ; A = préfixe des attributs ('dk' joueuse, 'dkm' MJ) ; extra = étiquette supplémentaire (« à apprendre ») */
+  function itemHTML(it, A, on, extra) {
+    var r = it.r, tg = '<div class="dk-rn"><b>' + esc(r.n) + '</b><span class="dk-tags">' + tagsOf(r) + (extra && it.st === 'ok' ? '<span class="dk-tag">' + esc(extra) + '</span>' : '') + '</span>' + (it.st !== 'ok' ? '<span class="dk-lockt">' + esc(lockTxt(it)) + '</span>' : '') + '</div>';
+    if (it.st !== 'ok') return '<li class="dk-row dk-locked" aria-disabled="true" data-dk-s="' + esc(r.e) + '" data-dk-l="' + r.l + '" data-dk-sc="' + esc(r.s) + '">' + tg + '</li>';
+    return '<li class="dk-row' + (on ? ' on' : '') + '" data-dk-s="' + esc(r.e) + '" data-dk-l="' + r.l + '" data-dk-sc="' + esc(r.s) + '">' + tg +
+      '<button type="button" class="dk-btn dk-pk' + (on ? ' primary' : '') + '" data-' + A + '-a="pick" data-' + A + '-s="' + esc(r.e) + '" aria-pressed="' + on + '">' + (on ? '✓ Dans le deck' : '+ Ajouter') + '<span class="dk-sr"> ' + esc(r.n) + '</span></button></li>';
+  }
+  /* liste paginée : « Afficher plus » au lieu d'un plafond silencieux */
+  function listHTMLItems(items, shown, A, onFn, extraFn) {
+    var n = items.length, ok = items.filter(function (i) { return i.st === 'ok'; }).length, h;
+    if (!n) return '<li class="dk-empty">Aucun sort ne correspond.</li>';
+    h = '<li class="dk-found" role="status">' + n + ' sort' + (n > 1 ? 's' : '') + ' de la classe · ' + ok + ' ajoutable' + (ok > 1 ? 's' : '') + ' à ce niveau</li>';
+    h += items.slice(0, shown).map(function (it) { return itemHTML(it, A, onFn(it.r.e), extraFn ? extraFn(it) : ''); }).join('');
+    if (n > shown) h += '<li class="dk-more"><button type="button" class="dk-btn" data-' + A + '-a="more">Afficher plus (' + (n - shown) + ' restant' + (n - shown > 1 ? 's' : '') + ')</button></li>';
+    return h;
+  }
   function pool(d) {
     var e = entry(), cl = clsOf(e, d.classe), M, q = fold(UI.q).trim();
     if (!cl) return [];
     M = H.ed.model(e);
-    return H.sp().filter(function (r) {
-      if (r.l < 1 || cl.alw.indexOf(r.e) >= 0 || !H.ed.ok(cl.en, r)) return false;
+    return classRows({ cls: cl.n, maxL: cl.maxL, alw: cl.alw, cant: UI.lv === 0 || (UI.lv < 0 && !!q), listed: function (r) { return H.ed.onList(cl.en, r); } }).filter(function (it) {
+      var r = it.r;
       if (UI.lv >= 0 && r.l !== UI.lv) return false;
       if (q && fold(r.n + ' ' + r.e).indexOf(q) < 0) return false;
       if (UI.sch && r.s !== UI.sch) return false;
@@ -902,33 +970,27 @@
       if (UI.inc && incKind(r) !== UI.inc) return false;
       if (cl.mode === 'known' && UI.mine && !M.mine[r.e]) return false;
       return true;
-    }).sort(function (a, b) { return a.l - b.l || a.n.localeCompare(b.n, 'fr'); });
+    });
   }
   function pickRows(d) {
-    var rows = pool(d), M = H.ed.model(entry()), cl = clsOf(entry(), d.classe), cap = 150, h;
-    if (!rows.length) return '<li class="dk-empty">Aucun sort ne correspond.</li>';
-    h = rows.slice(0, cap).map(function (r) {
-      var on = d.sorts.indexOf(r.e) >= 0, learn = cl && cl.mode === 'known' && !M.mine[r.e];
-      return '<li class="dk-row' + (on ? ' on' : '') + '" data-dk-s="' + esc(r.e) + '" data-dk-l="' + r.l + '" data-dk-sc="' + esc(r.s) + '"><div class="dk-rn"><b>' + esc(r.n) + '</b><span class="dk-tags">' + tagsOf(r) + (learn ? '<span class="dk-tag">à apprendre</span>' : '') + '</span></div>' +
-        '<button type="button" class="dk-btn dk-pk' + (on ? ' primary' : '') + '" data-dk-a="pick" data-dk-s="' + esc(r.e) + '" aria-pressed="' + on + '">' + (on ? '✓ Dans le deck' : '+ Ajouter') + '<span class="dk-sr"> ' + esc(r.n) + '</span></button></li>';
-    }).join('');
-    if (rows.length > cap) h += '<li class="dk-empty">' + (rows.length - cap) + ' autres sorts : affine la recherche.</li>';
-    return h;
+    var items = pool(d), M = H.ed.model(entry()), cl = clsOf(entry(), d.classe), sig = [UI.q, UI.lv, UI.sch, UI.conc, UI.rit, UI.inc, UI.mine, d.id].join('|');
+    if (sig !== UI.pgSig) { UI.pgSig = sig; UI.pg = 1; }
+    return listHTMLItems(items, (UI.pg || 1) * PAGE, 'dk', function (id) { return d.sorts.indexOf(id) >= 0; }, function (it) { return cl && cl.mode === 'known' && !M.mine[it.r.e] ? 'à apprendre' : ''; });
   }
   function pickHTML() {
     var d = S.doc.decks[UI.id], cl = d && clsOf(entry(), d.classe), mx, i, h, schools = [];
     if (!isObj(d) || !cl) return '<p class="dk-empty">Deck introuvable.</p>';
-    mx = cl.maxL;
-    H.sp().forEach(function (r) { if (r.s && schools.indexOf(r.s) < 0) schools.push(r.s); });
+    mx = 0;
+    H.sp().forEach(function (r) { if (r.s && schools.indexOf(r.s) < 0) schools.push(r.s); if (r.l > mx && (H.ed.onList(cl.en, r) || cl.alw.indexOf(r.e) >= 0)) mx = r.l; });
     schools.sort(function (a, b) { return a.localeCompare(b, 'fr'); });
     h = '<h3 class="dk-h3">Ajouter des sorts à « ' + esc(d.nom) + ' »</h3><p>' + counter(d, cl) + '</p>' +
       '<input type="search" class="dk-q" data-dk-f="q" value="' + esc(UI.q) + '" placeholder="Chercher un sort" aria-label="Chercher un sort" autocomplete="off">' +
-      '<div class="dk-chips" role="group" aria-label="Niveau"><button type="button" class="dk-chip' + (UI.lv < 0 ? ' on' : '') + '" data-dk-lv="-1" aria-pressed="' + (UI.lv < 0) + '">Tous</button>';
+      '<div class="dk-chips" role="group" aria-label="Niveau"><button type="button" class="dk-chip' + (UI.lv < 0 ? ' on' : '') + '" data-dk-lv="-1" aria-pressed="' + (UI.lv < 0) + '">Tous</button><button type="button" class="dk-chip' + (UI.lv === 0 ? ' on' : '') + '" data-dk-lv="0" aria-pressed="' + (UI.lv === 0) + '">Mineurs</button>';
     for (i = 1; i <= mx; i++) h += '<button type="button" class="dk-chip' + (UI.lv === i ? ' on' : '') + '" data-dk-lv="' + i + '" aria-pressed="' + (UI.lv === i) + '">Niv. ' + i + '</button>';
     h += '</div><div class="dk-chips" role="group" aria-label="Filtres">' +
       '<button type="button" class="dk-chip' + (UI.conc ? ' on' : '') + '" data-dk-a="tog-conc" aria-pressed="' + !!UI.conc + '">Concentration</button>' +
       '<button type="button" class="dk-chip' + (UI.rit ? ' on' : '') + '" data-dk-a="tog-rit" aria-pressed="' + !!UI.rit + '">Rituel</button>' +
-      (cl.mode === 'known' ? '<button type="button" class="dk-chip' + (UI.mine ? ' on' : '') + '" data-dk-a="tog-mine" aria-pressed="' + !!UI.mine + '">Mes sorts connus</button>' : '') + '</div>' +
+      (cl.mode === 'known' ? '<button type="button" class="dk-chip' + (UI.mine ? ' on' : '') + '" data-dk-a="tog-mine" aria-pressed="' + !!UI.mine + '">Seulement mes sorts connus</button>' : '') + '</div>' +
       '<div class="dk-sel"><label>École<select data-dk-f="sch"><option value="">Toutes</option>' + schools.map(function (s) { return '<option value="' + esc(s) + '"' + (UI.sch === s ? ' selected' : '') + '>' + esc(s.charAt(0).toUpperCase() + s.slice(1)) + '</option>'; }).join('') + '</select></label>' +
       '<label>Incantation<select data-dk-f="inc">' + [['', 'Toutes'], ['action', 'Action'], ['bonus', 'Action bonus'], ['reaction', 'Réaction'], ['longue', 'Plus longue (minutes, heures)']].map(function (o) { return '<option value="' + o[0] + '"' + (UI.inc === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label></div>';
     if (UI.msg) h += '<p class="dk-msg' + (UI.err ? ' err' : '') + '" role="status">' + esc(UI.msg) + '</p>';
@@ -1012,7 +1074,7 @@
     if (a === 'sugg') { markSeen(); UI.sc = ''; go('sugg'); return; }
     if (a === 'seen') { markSeen(); render(); return; }
     if (a === 'sc') { UI.sc = t.getAttribute('data-dk-c'); render(); return; }
-    if (a === 'usemodel') { var nd2 = useModel(t.getAttribute('data-dk-m')); if (nd2) go('edit', nd2.id); else render(); return; }
+    if (a === 'usemodel') { var nd2 = useModel(t.getAttribute('data-dk-m')); if (nd2) { go('edit', nd2.id); var cl2 = clsOf(entry(), nd2.classe); setMsg('Deck copié dans tes decks, pas encore équipé : touche « ' + (cl2 && cl2.mode === 'known' ? 'Activer' : 'Équiper') + ' » pour l\'appliquer à ta fiche.', false); render(); } else render(); return; }
     if (a === 'back') { if (UI.view === 'pick') go('edit'); else go('list'); return; }
     if (a === 'dup') { dupDeck(id); render(); return; }
     if (a === 'del') { UI.ask = { k: 'del', id: id }; render(); var no = rootEl.querySelector('[data-dk-a="no"]'); if (no) no.focus(); return; }
@@ -1024,10 +1086,11 @@
       render(); return;
     }
     if (a === 'equip') { askEquip(id); render(); var ak = rootEl.querySelector('.dk-ask [data-dk-a="no"]'); if (ak) ak.focus(); return; }
-    if (a === 'addspells') { UI.q = ''; UI.lv = -1; UI.sch = ''; UI.conc = false; UI.rit = false; UI.inc = ''; UI.mine = clsOf(entry(), d && d.classe) ? clsOf(entry(), d.classe).mode === 'known' : false; go('pick'); return; }
+    if (a === 'addspells') { UI.q = ''; UI.lv = -1; UI.sch = ''; UI.conc = false; UI.rit = false; UI.inc = ''; UI.mine = false; UI.pg = 1; go('pick'); return; }
     if (a === 'addknown') { addKnown(d); render(); return; }
     if (a === 'learn') { learn(d); return; }
     if (a === 'unequip') { S.doc.actif = ''; touchMeta(); setMsg('Deck désactivé : aucun filtre sur tes sorts.', false); applyFilter(); render(); return; }
+    if (a === 'more') { UI.pg = (UI.pg || 1) + 1; fillPick(); var nm0 = rootEl.querySelector('#dkPickList [data-dk-a="more"]'); if (nm0) { try { nm0.focus(); } catch (e0) { /* ignoré */ } } return; }
     if (a === 'tog-conc') { UI.conc = !UI.conc; render(); return; }
     if (a === 'tog-rit') { UI.rit = !UI.rit; render(); return; }
     if (a === 'tog-mine') { UI.mine = !UI.mine; render(); return; }
@@ -1083,5 +1146,5 @@
   api.open = function () { openUI(null); };
   api._state = function () { return { S: S, UI: UI }; };
   /* interne : partagé avec decks-mj.js (vue MJ) */
-  api.x = { H: function () { return H; }, DB: function () { return DB; }, S: S, esc: esc, now: now, role: role, spById: spById, classesOf: classesOf, clsOf: clsOf, models: models, customModels: customModels, tagsOf: tagsOf, legalIds: legalIds, themeSel: themeSel, sheetEquip: sheetEquip, counter: counter, warnHTML: warnHTML };
+  api.x = { H: function () { return H; }, DB: function () { return DB; }, S: S, esc: esc, now: now, role: role, spById: spById, classesOf: classesOf, clsOf: clsOf, models: models, customModels: customModels, tagsOf: tagsOf, legalIds: legalIds, classRows: classRows, listHTMLItems: listHTMLItems, fold: fold, themeSel: themeSel, sheetEquip: sheetEquip, counter: counter, warnHTML: warnHTML };
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' && globalThis.document ? globalThis : null));
