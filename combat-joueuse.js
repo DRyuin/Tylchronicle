@@ -396,7 +396,9 @@
   }
 
   /* ----- sorts : liste de la fiche (app.js : pvMySpells), emplacements via tkCast (app.js), jets via roll ----- */
-  function spellRows() { return H.spells ? H.spells() || [] : []; }
+  function spellRows() { return H.spells ? H.spells() || [] : []; }   /* tous les sorts de la fiche : sert à retrouver un sort à lancer, même hors du deck affiché */
+  /* decks de sorts (decks.js) : sorts affichés + puces « Deck actif / Tous » ; sans deck actif, liste et rendu inchangés */
+  function deckOf(rows) { try { return root.tylDK && root.tylDK.deckView ? root.tylDK.deckView(rows) : null; } catch (er) { return null; } }
   function findSpell(e) { var l = spellRows(), i; for (i = 0; i < l.length; i++) if (l[i].e === e) return l[i]; return null; }
   /* niveaux d'emplacement possibles pour ce sort (vide = plus d'emplacement) */
   function levelsOf(r, memo) {
@@ -511,9 +513,10 @@
   }
 
   function onClick(ev) {
-    var t = ev.target && ev.target.closest ? ev.target.closest('[data-cs-hp],[data-cs-tmp],[data-cs-eco],[data-cs-roll],[data-cs-tab],[data-cs-cast],[data-cs-sdmg],[data-cs-use],[data-cs-bt]') : null;
+    var t = ev.target && ev.target.closest ? ev.target.closest('[data-cs-hp],[data-cs-tmp],[data-cs-eco],[data-cs-roll],[data-cs-tab],[data-cs-cast],[data-cs-sdmg],[data-cs-use],[data-cs-bt],[data-cs-dk]') : null;
     if (!t) return;
     if (t.hasAttribute('data-cs-tab')) { selectTab(t.getAttribute('data-cs-tab'), false); return; }
+    if (t.hasAttribute('data-cs-dk')) { try { root.tylDK.setFilter(t.getAttribute('data-cs-dk') === 'on'); } catch (er) { /* ignoré */ } paint(); return; }
     var view = cur(), e = H.entry(), me = view && e ? mineOf(view, e.id) : null;
     if (!me) return;
     /* contrôle grisé atteint quand même (clavier, lecteur d'écran) : message court, rien n'est envoyé ni consommé */
@@ -594,7 +597,7 @@
       }).join('') + '</ul>';
       body += end;
     } else if (tab === 'sorts') {
-      body += TB.spellsHTML(cxOf(view, me)) + end;
+      body += dkBtn() + TB.spellsHTML(cxOf(view, me)) + end;
     } else {
       body += '<h3>Mon sac</h3>' + TB.bagHTML(cxOf(view, me)) + end;
     }
@@ -617,9 +620,9 @@
   }
   /* contexte fourni aux constructeurs d'onglets (combat-onglets.js) */
   function cxOf(view, me) {
-    var memo = {}, b = bagNow(), slots = H.slotInfo ? H.slotInfo() : null;
+    var memo = {}, b = bagNow(), slots = H.slotInfo ? H.slotInfo() : null, allSp = spellRows(), dv = deckOf(allSp);
     return {
-      esc: esc, pend: pend, bag: { items: b.items, over: b.over }, spells: spellRows(),
+      esc: esc, pend: pend, bag: { items: b.items, over: b.over }, spells: dv ? dv.rows : allSp, deck: dv ? { nom: dv.nom, on: dv.on, set: dv.set, fav: dv.fav } : null,
       st: function (extra) { return stOf(me, view, extra); },
       levels: function (r) { return levelsOf(r, memo); },
       slotPick: function (r, lv) { return lv.indexOf(slotSel[r.e]) >= 0 ? slotSel[r.e] : lv[0]; },
@@ -636,9 +639,12 @@
     }).join('') + '</ol></details>';
   }
 
+  /* bouton « Mes decks » (decks.js) : vide tant que decks/cfg n'est pas actif => rendu inchangé */
+  function dkBtn() { try { return root.tylDK && root.tylDK.btnHTML ? root.tylDK.btnHTML('cs') : ''; } catch (er) { return ''; } }
+
   function focusKey(el) {
     if (!el || !el.getAttribute) return '';
-    var k = ['data-cs-hp', 'data-cs-tmp', 'data-cs-eco', 'data-pa', 'data-cs-tab', 'data-cs-cast', 'data-cs-sdmg', 'data-cs-use', 'data-cs-bt', 'data-cs-slot'].filter(function (a) { return el.hasAttribute(a); })[0];
+    var k = ['data-cs-hp', 'data-cs-tmp', 'data-cs-eco', 'data-pa', 'data-cs-tab', 'data-cs-cast', 'data-cs-sdmg', 'data-cs-use', 'data-cs-bt', 'data-cs-slot', 'data-cs-dk'].filter(function (a) { return el.hasAttribute(a); })[0];
     if (k) return k + '=' + el.getAttribute(k);
     if (el.hasAttribute('data-cs-roll')) { var r = el.closest('[data-cs-w]'); return 'roll=' + el.getAttribute('data-cs-roll') + '@' + (r ? r.getAttribute('data-cs-w') : ''); }
     return '';

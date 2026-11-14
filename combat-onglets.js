@@ -184,18 +184,27 @@
   }
   api.actBtn = actBtn;
 
+  /* decks de sorts (decks.js) : puces « Deck actif / Tous » ; sans cx.deck, aucune puce et le rendu reste celui d'avant */
+  function deckRank(id, dk) { return dk.fav && dk.fav[id] ? 0 : dk.set && dk.set[id] ? 1 : 2; }
+  function deckChips(cx) {
+    var e = cx.esc, dk = cx.deck;
+    return '<div class="dk-chips cs-dkc" role="group" aria-label="Sorts affichés">' +
+      '<button type="button" class="dk-chip' + (dk.on ? ' on' : '') + '" data-cs-dk="on" aria-pressed="' + (dk.on ? 'true' : 'false') + '">Deck actif : ' + e(dk.nom) + '</button>' +
+      '<button type="button" class="dk-chip' + (dk.on ? '' : ' on') + '" data-cs-dk="off" aria-pressed="' + (dk.on ? 'false' : 'true') + '">Tous</button></div>';
+  }
   function spellsHTML(cx) {
-    var e = cx.esc, rows = cx.spells || [], h = '', lvls = [], i;
-    if (!rows.length) return '<p class="muted">Aucun sort repéré sur ta fiche. Ouvre l\'onglet « Sorts &amp; objets » de ta page pour les choisir.</p>';
+    var e = cx.esc, rows = cx.spells || [], h = '', lvls = [], i, dk = cx.deck || null, chips = dk ? deckChips(cx) : '';
+    if (!rows.length) return chips + (dk ? '<p class="muted">Aucun sort du deck sur ta fiche. Touche « Tous » pour voir tous tes sorts.</p>' : '<p class="muted">Aucun sort repéré sur ta fiche. Ouvre l\'onglet « Sorts &amp; objets » de ta page pour les choisir.</p>');
+    h = chips;
     rows.forEach(function (r) { if (lvls.indexOf(r.l) < 0) lvls.push(r.l); });
     lvls.sort(function (a, b) { return a - b; });
     for (i = 0; i < lvls.length; i++) {
       var L = lvls[i];
       h += '<section class="cs-grp" aria-label="' + e(levelName(L)) + '"><h3>' + e(levelName(L)) + (L ? ' <small class="muted">' + e(cx.slotsLine ? cx.slotsLine(L) : '') + '</small>' : '') + '</h3><ul class="cs-list">';
-      rows.filter(function (r) { return r.l === L; }).forEach(function (r) {
+      rows.filter(function (r) { return r.l === L; }).map(function (r, ix) { return { r: r, ix: ix }; }).sort(function (a, b) { return dk ? (deckRank(a.r.e, dk) - deckRank(b.r.e, dk)) || (a.ix - b.ix) : a.ix - b.ix; }).map(function (o) { return o.r; }).forEach(function (r) {
         var ty = spellType(r), lv = cx.levels(r), pick = cx.slotPick(r, lv), none = !lv.length, comp = String(r.c || '').split(',').map(function (x) { return x.replace(/^\s+|\s+$/g, ''); }).filter(Boolean).join(', ');
         var b = actBtn(cx, { attrs: 'data-cs-cast="' + e(r.e) + '"', ty: ty, label: 'Lancer', aria: 'Lancer ' + r.n, primary: true, off: none ? cx.noSlot(r) : '' });
-        h += '<li class="cs-row' + (b.g.off ? ' cs-off' : '') + '" data-cs-spell="' + e(r.e) + '"><div class="cs-rn"><b>' + e(r.n) + '</b> ' + badge(ty) + (r.k ? ' <span class="cs-tag">Concentration</span>' : '') + '</div>' +
+        h += '<li class="cs-row' + (b.g.off ? ' cs-off' : '') + '" data-cs-spell="' + e(r.e) + '"><div class="cs-rn"><b>' + e(r.n) + '</b>' + (dk && dk.fav && dk.fav[r.e] ? ' <span class="cs-fav" role="img" aria-label="Favori">★</span>' : '') + ' ' + badge(ty) + (r.k ? ' <span class="cs-tag">Concentration</span>' : '') + '</div>' +
           '<div class="cs-ri">Incantation : ' + e(castLabel(r)) + ' · Portée : ' + e(r.r || '—') + ' · Composantes : ' + e(comp || '—') + (r.d ? ' · Durée : ' + e(r.d) : '') + '</div>' +
           (rollText(r) ? '<div class="cs-ri">' + e(rollText(r)) + '</div>' : '') +
           '<div class="cs-rs">' + e(summary(r.x)) + '</div><div class="cs-rb">';

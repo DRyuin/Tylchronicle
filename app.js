@@ -8082,6 +8082,7 @@ var go0 = z.querySelector('[data-psp]:not(:disabled)'); if (go0) { try { go0.foc
 function renderPvSpells() {
 var e = myEntry();
 try { spedPv(e); } catch (er) { /* ignoré */ }
+try { if (window.tylDK && window.tylDK.onEntry) window.tylDK.onEntry(e); } catch (er) { /* ignoré */ }
 if (!e) return;
 var cl0 = casterList(e), sc0 = $('pvscast');
 if (sc0) {
@@ -8098,9 +8099,10 @@ if (pv.slv.length && pv.slv.indexOf(r.l) < 0) return false;
 if (pv.scl && r.cls.indexOf(pv.scl) < 0) return false;
 if (q && r.n.toLowerCase().indexOf(q) < 0 && r.e.toLowerCase().indexOf(q) < 0) return false;
 if (mine && !spHas(e, r)) return false;
+if (mine && window.tylDK && window.tylDK.only && !window.tylDK.only(r)) return false;   /* deck actif (classes à sorts connus) : raccourci */
 if (scope === 'class' && !inCls(r)) return false;
 return true;
-}).sort(function (a, b) { return (a.l - b.l) || a.n.localeCompare(b.n, 'fr'); });
+}).sort(function (a, b) { return (a.l - b.l) || (mine && window.tylDK && window.tylDK.rank ? window.tylDK.rank(a) - window.tylDK.rank(b) : 0) || a.n.localeCompare(b.n, 'fr'); });   /* deck actif : favoris, puis sorts du deck, puis les autres */
 $('pvsl').innerHTML = res.slice(0, 120).map(function (r) { return pcCard(r, e, spHas(e, r)); }).join('') || '<p class="muted">' + (mine ? 'Aucun sort de ta fiche ne correspond. Choisis « Tous les sorts de ma classe » pour voir ce que ta classe peut apprendre.' : scope === 'class' && !ents.length ? 'Ta fiche n\'a pas de classe qui lance des sorts.' : 'Aucun sort.') + '</p>';
 if (res.length > 120) $('pvsl').insertAdjacentHTML('beforeend', '<p class="sm muted">' + (res.length - 120) + ' autres : précise ta recherche.</p>');
 }
@@ -12274,6 +12276,7 @@ sortLib();
 libLoaded = true;
 render(); announce(); renderPvSpells();
 }, function () { libCol = null; libLoaded = true; loadLocalLib(); render(); });
+try { if (window.tylDK && window.tylDK.attach) window.tylDK.attach(db); } catch (e) { /* ignoré */ }
 }).catch(startLocal);
 }
 function loadLocalLib() {
@@ -12295,7 +12298,9 @@ function tkOK(e) { var l = e && e.x ? classesFromX(e.x) : []; return !!(l.length
 function tkMod(e, k) { var ab = (e.x && e.x.ab) || {}; return Math.floor((int(ab[k], 10) - 10) / 2); }
 function tkUse(e) {
 var u = (e && e.x && e.x.use) || {};
-return { sl: u.sl && typeof u.sl === 'object' ? u.sl : {}, pa: int(u.pa, 0), rs: u.rs && typeof u.rs === 'object' ? u.rs : {}, hd: u.hd && typeof u.hd === 'object' ? u.hd : {}, conc: String(u.conc || '') };
+var o = { sl: u.sl && typeof u.sl === 'object' ? u.sl : {}, pa: int(u.pa, 0), rs: u.rs && typeof u.rs === 'object' ? u.rs : {}, hd: u.hd && typeof u.hd === 'object' ? u.hd : {}, conc: String(u.conc || '') };
+if (int(u.lr, 0) > 0) o.lr = int(u.lr, 0);   /* repos longs pris (decks de sorts : changement de deck autorisé après un repos long) */
+return o;
 }
 function tkW(e, fn) {
 e.x = e.x || {};
@@ -12995,7 +13000,7 @@ tkW(e, function (u) {
 tkRes(e).forEach(function (r) { if (kind === 'long' || r.r === 'c') delete u.rs[r.k]; });
 u.pa = 0;
 if (kind === 'long') {
-u.sl = {}; u.conc = '';
+u.sl = {}; u.conc = ''; u.lr = int(u.lr, 0) + 1;
 var hd = tkHD(e), tot = 0;
 Object.keys(hd).forEach(function (k) { tot += hd[k]; });
 var back = Math.max(1, Math.floor(tot / 2));
@@ -13588,6 +13593,17 @@ try {
 if (window.tylTK && window.tylTK.bind) window.tylTK.bind({
 S: function () { return S; }, esc: esc, role: function () { return role; }, simple: simple, loaded: function () { return loaded; }, render: render,
 mine: function () { var c = role === 'joueur' ? myC() : null; return c ? c.id : ''; }
+});
+} catch (e) { /* ignoré */ }
+try {
+if (window.tylDK && window.tylDK.bind) window.tylDK.bind({
+role: function () { return role; }, esc: esc, entry: myEntry, sp: function () { return SP; }, spById: spByEn,
+/* decks de sorts (decks.js) : tout passe par l'éditeur de sorts existant, jamais de logique de plafonds en double */
+spells: renderPvSpells, render: render,
+/* vue MJ des decks (decks-mj.js) : fiches PJ, classes lanceuses, niveaux de sorts */
+pjs: function () { return lib.filter(function (e) { return hasTag(e, 'PJ') && e.x; }); }, byId: libById, code: function (n) { return CLASS_CODE[n] || ''; },
+cap: function (n, lv) { var c = classByName(/^Druide/.test(n) ? 'Druide' : n); return c ? spellCounts(c, lv, 0).slots.length : 9; },
+ed: { levels: classesFromX, ents: spedEnts, ok: spedOk, model: spedModel, lock: spedLock, entOf: spedEnt, norm: spedNorm, over: spedOver, draft: spedD, setDraft: function (id, d) { SPED[id] = d; }, put: spedPut, save: spedSave, ui: spedU, refresh: spedRefresh, rest: function (e) { return tkUse(e).lr; }, mine: function (e, r) { return spHas(e, r); } }
 });
 } catch (e) { /* ignoré */ }
 initStorage();
