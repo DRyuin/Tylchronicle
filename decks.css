@@ -1,0 +1,105 @@
+/* decks.css : écran « Mes decks » (decks.js). Charte existante (variables de style.css, thèmes clair/sombre), mobile d'abord.
+   Cibles >= 44 px, texte >= 14 px, 100dvh, zones sûres, focus visible, prefers-reduced-motion. Rien n'est affiché tant que decks/cfg n'est pas actif. */
+.dk-bar { margin: 0 0 10px; }
+.dk-bar[hidden] { display: none; }
+.dk-open { box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; min-height: 48px; min-width: 44px; padding: 0 16px; border: 2px solid var(--brass); border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; font-size: 1rem; font-weight: 700; cursor: pointer; touch-action: manipulation; max-width: 100%; }
+.dk-open-a { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 14em; }
+.dk-open:hover { background: var(--brass-soft); }
+html.dk-lock { overflow: hidden; }
+
+.dk { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 90; box-sizing: border-box; display: flex; flex-direction: column; height: 100vh; height: 100dvh; background: var(--bg); color: var(--ink); font: 1rem/1.45 var(--font-body); }
+.dk[hidden] { display: none; }
+.dk *, .dk *::before, .dk *::after { box-sizing: border-box; }
+.dk-hd { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: calc(8px + env(safe-area-inset-top, 0px)) calc(14px + env(safe-area-inset-right, 0px)) 8px calc(14px + env(safe-area-inset-left, 0px)); background: var(--surface); border-bottom: 2px solid var(--brass); }
+.dk-hd h2 { font-family: var(--font-display); font-weight: 500; font-size: 1.25rem; letter-spacing: .02em; }
+.dk-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; padding: 12px calc(14px + env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) calc(14px + env(safe-area-inset-left, 0px)); max-width: 760px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
+.dk h3, .dk h4 { margin: 0; }
+.dk-h3 { font-family: var(--font-display); font-weight: 500; font-size: 1.2rem; overflow-wrap: anywhere; }
+.dk h4 { font-size: 1rem; color: var(--brass-ink); text-transform: uppercase; letter-spacing: .08em; margin: 6px 0; }
+.dk p { margin: 0; overflow-wrap: anywhere; }
+.dk .muted, .dk-meta, .dk-lim { color: var(--muted); font-size: .95rem; }
+
+.dk-x, .dk-btn, .dk-chip, .dk-ic { box-sizing: border-box; min-height: 44px; min-width: 44px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); color: var(--ink); font: inherit; font-size: 1rem; cursor: pointer; touch-action: manipulation; }
+.dk-x { padding: 0 16px; font-weight: 600; }
+.dk-btn { padding: 0 14px; font-weight: 600; }
+.dk-btn.primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 700; }
+.dk-btn.danger { color: var(--bad); }
+.dk-btn:disabled { opacity: .5; cursor: default; }
+.dk-x:hover, .dk-btn:hover:not(:disabled), .dk-chip:hover, .dk-ic:hover { border-color: var(--muted); }
+.dk-chip { padding: 0 14px; border-radius: 999px; }
+.dk-chip.on { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 700; }
+.dk-ic { padding: 0; font-size: 1.25rem; line-height: 1; }
+.dk-ic[aria-pressed="true"] { color: var(--brass-ink); border-color: var(--brass); background: var(--brass-soft); }
+.dk :focus-visible { outline: 3px solid var(--brass); outline-offset: 2px; }
+.dk-open:focus-visible { outline: 3px solid var(--brass); outline-offset: 2px; }
+
+.dk-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.dk-btns > .dk-btn { flex: 1 1 auto; }
+.dk-end { margin-top: 8px; }
+.dk-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.dk-sel { display: flex; flex-wrap: wrap; gap: 8px; }
+.dk-sel label { flex: 1 1 10em; min-width: 0; }
+.dk-lab, .dk-sel label, .dk-form label { display: flex; flex-direction: column; gap: 4px; font-size: .95rem; color: var(--muted); font-weight: 600; }
+.dk input[type=text], .dk input[type=search], .dk select { width: 100%; min-height: 48px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 1rem; }
+.dk-form { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+
+.dk-intro { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.dk-active { font-size: 1.05rem; }
+.dk-banner, .dk-msg, .dk-over { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); }
+.dk-banner { border-color: var(--brass); background: var(--brass-soft); }
+.dk-msg.err, .dk-over { border-color: var(--bad); background: var(--bad-soft); }
+.dk-empty { color: var(--muted); padding: 10px 2px; }
+.dk-ask { padding: 12px; border-radius: 12px; border: 2px solid var(--brass); background: var(--brass-soft); display: flex; flex-direction: column; gap: 8px; }
+
+.dk-cards, .dk-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.dk-card { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); min-width: 0; }
+.dk-card.on { border-color: var(--brass); box-shadow: 0 0 0 1px var(--brass); background: var(--brass-soft); }
+.dk-ct { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dk-ct h3 { font-family: var(--font-display); font-weight: 500; font-size: 1.1rem; overflow-wrap: anywhere; }
+.dk-pill { flex: none; padding: 2px 10px; border-radius: 999px; background: var(--primary); color: var(--on-primary); font-size: .9rem; font-weight: 700; }
+.dk-note { font-style: italic; }
+.dk-count { display: inline-block; padding: 2px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); }
+.dk-count.dk-full { border-color: var(--ok); }
+.dk-count.dk-bad { border-color: var(--bad); background: var(--bad-soft); color: var(--bad); font-weight: 700; }
+.dk-count small { color: var(--muted); }
+
+.dk-warn { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.dk-w { padding: 8px 12px; border-radius: 10px; border: 1px dashed var(--line-strong, var(--muted)); background: var(--surface); font-size: .95rem; }
+.dk-w-conc { border-style: solid; border-color: var(--warn); background: var(--brass-soft); }
+.dk-grp { display: flex; flex-direction: column; gap: 4px; }
+.dk-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); min-width: 0; }
+.dk-row.on { border-color: var(--primary); }
+.dk-rn { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.dk-rn b { overflow-wrap: anywhere; }
+.dk-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.dk-tag { padding: 0 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-2); font-size: .875rem; color: var(--muted); }
+.dk-ra { display: flex; gap: 6px; flex: none; }
+.dk-pk { flex: none; min-width: 112px; }
+.dk-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* tranche 4 : propositions du MJ (joueuse) et vue MJ ; tranche 5 : puces du panneau « Mon combat » */
+.dk-pill-mj { background: var(--brass-soft); color: var(--brass-ink); border: 1px solid var(--brass); }
+.dk-spells { color: var(--muted); font-size: .95rem; }
+.dk-mj .dk-banner { margin: 0; }
+.dk-prop { border-color: var(--brass); }
+.cs-dkc { margin: 0 0 10px; }
+.cs-fav { color: var(--brass-ink); font-size: 1rem; }
+.dkm-panel[hidden] { display: none; }
+.dkm-panel .dk-btn, .dkm-panel .dkm-sw { font-size: 1rem; }
+.dkm-sw { display: flex; align-items: flex-start; gap: 10px; min-height: 44px; padding: 6px 0; cursor: pointer; color: var(--ink); font-weight: 600; }
+.dkm-sw input { flex: none; width: 24px; height: 24px; margin: 2px 0 0; accent-color: var(--primary); }
+.dkm-sw span { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.dkm-sw small, .dkm-pn small, .dkm-st { font-weight: 400; color: var(--muted); font-size: .95rem; }
+.dkm-pl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.dkm-pl li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dkm-pn { min-width: 0; overflow-wrap: anywhere; }
+.dkm-st:empty { display: none; }
+.dkm-det > summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; font-weight: 600; }
+.dkm-det > summary:focus-visible { outline: 3px solid var(--brass); outline-offset: 2px; }
+#dkMj .dk-lab select { min-height: 48px; }
+
+@media (min-width: 700px) {
+  .dk-body { padding-top: 18px; }
+  .dk-btns > .dk-btn { flex: 0 1 auto; }
+}
+@media (prefers-reduced-motion: reduce) { .dk, .dk * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
