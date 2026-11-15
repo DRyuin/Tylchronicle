@@ -8906,16 +8906,15 @@ pvlSave(); pvlApply(false); pvlEditDecorate();
 document.addEventListener('pointerup', function (ev) { pvxEnd(ev, false); });
 document.addEventListener('pointercancel', function (ev) { pvxEnd(ev, true); });
 document.addEventListener('click', function (ev) {
-var b = ev.target && ev.target.closest ? ev.target.closest('#pvEditBtn,#pvSndBtn') : null;
+var b = ev.target && ev.target.closest ? ev.target.closest('#pvEditBtn,#pvSndBtn,#pvSndTop') : null;
 if (!b) return;
 if (b.id === 'pvEditBtn') { pvEditSet(!pvEdit); return; }
-var pop = $('pvSndPop'), on = !pop.classList.contains('open');
-pop.classList.toggle('open', on); b.setAttribute('aria-expanded', String(on));
+pvSndOpen(!$('pvSndPop').classList.contains('open'));
 });
 document.addEventListener('click', function (ev) {
 var pop = $('pvSndPop'); if (!pop || !pop.classList.contains('open')) return;
-if (ev.target.closest && ev.target.closest('#pvSndPop,#pvSndBtn')) return;
-pop.classList.remove('open'); $('pvSndBtn').setAttribute('aria-expanded', 'false');
+if (ev.target.closest && ev.target.closest('#pvSndPop,#pvSndBtn,#pvSndTop,#sndMini')) return;
+pvSndOpen(false);
 });
 function pvNavSync() { var b = $('pvEditBtn'); if (b) b.hidden = !!$('pvMain').hidden; }
 (function () { var rp0 = renderPlayer; renderPlayer = function () { rp0(); pvNavSync(); if (pvEdit) pvlEditDecorate(); evCheck(); }; })();
@@ -10579,9 +10578,16 @@ else if (a === 'plgo') { var cm = (snd.st || {}).music || {}, pp = snd.pls.filte
 else if (a === 'next') sndAdvance(1, false);
 else if (a === 'prev') sndAdvance(-1, false);
 }
+function pvSndOpen(on) {
+var pop = $('pvSndPop'); if (!pop) return;
+pop.classList.toggle('open', on);
+['pvSndBtn', 'pvSndTop'].forEach(function (id) { var e = $(id); if (e) e.setAttribute('aria-expanded', String(on)); });
+if (on) { var mn = $('pvMenu'); if (mn) mn.open = false; }
+}
 function sndAct(a, v) {
 var st = snd.st || {}, m = st.music || {};
 if (a === 'join') { sndJoin(); return; }
+if (a === 'open' && role === 'joueur') { pvSndOpen(true); return; }
 if (a === 'open') { try { $('tabCombat').click(); var pn = $('sndPanel'); if (pn) { pn.open = true; pn.scrollIntoView({ block: 'start' }); } } catch (e) { /* ignoré */ } return; }
 if (/^(pl(?!ay$)|next$|prev$)/.test(a)) { if (role !== 'joueur') { if (!snd.on) sndJoin(); sndPlAct(a, v); } return; }
 if (a === 'mute') { snd.muted = !snd.muted; sndApply(); renderSnd(); return; }
@@ -10599,7 +10605,7 @@ else if (a === 'tdel') { if (!confirmed('tdel:' + v)) return; if (snd.tkCol) { t
 function sndBtn(l, a, v, cls, dis) { return '<button type="button" class="btn sm ' + (cls || '') + '" data-snd="' + a + '"' + (v !== undefined ? ' data-v="' + esc(v) + '"' : '') + (dis ? ' disabled' : '') + '>' + l + '</button>'; }
 function renderSnd() {
 var mj = role !== 'joueur', st = snd.st || {}, m = st.music || {}, mjEl = $('sndBody'), pvEl = $('pvSnd');
-var sig = JSON.stringify([mj, snd.on, snd.muted, snd.mv, snd.fv, m.aid, m.playing, m.loop, m.vol, m.pl, m.idx, snd.pls.map(function (x) { return [x.id, x.name, x.tids, x.loop, x.shuf]; }), st.fvol, snd.tracks.map(function (x) { return [x.id, x.name]; }), snd.msg, snd.busy, armed && /^(tdel|pldel):/.test(String(armed)) ? armed : '', !!snd.assets]);
+var sig = JSON.stringify([mj, snd.on, snd.muted, snd.mv, snd.fv, m.aid, m.playing, m.loop, m.vol, m.pl, m.idx, snd.pls.map(function (x) { return [x.id, x.name, x.tids, x.loop, x.shuf]; }), st.fvol, m.name, !!snd.docRef, snd.tracks.map(function (x) { return [x.id, x.name]; }), snd.msg, snd.busy, armed && /^(tdel|pldel):/.test(String(armed)) ? armed : '', !!snd.assets]);
 if (sig === snd.sig) return;
 snd.sig = sig;
 var leadSel = role !== 'joueur' ? '<div class="sndrow"><label>Délai de synchro avec les joueuses <select id="sndLead">' + [[0, 'aucun'], [500, '0,5 s'], [1000, '1 s'], [1500, '1,5 s'], [2500, '2,5 s']].map(function (o) { return '<option value="' + o[0] + '"' + (snd.lead === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label></div>' : '';
@@ -10610,10 +10616,19 @@ if (!mj) pvEl.innerHTML = snd.on ? '<div class="sndbar"><b>🎵 ' + esc(m.aid &&
 }
 var mini = $('sndMini');
 if (mini) {
-var show = mj && !!m.aid;
+var show = mj ? !!snd.docRef : !!m.aid;
 mini.hidden = !show;
-document.body.style.paddingBottom = show ? '58px' : '';
-if (show) mini.innerHTML = '<span class="eq' + (m.playing ? ' on' : '') + '" aria-hidden="true"><i></i><i></i><i></i></span><b>' + esc(m.name || 'Musique') + '</b>' + (m.pl ? sndBtn('⏮', 'prev') : '') + (m.playing ? sndBtn('⏸', 'pause') : sndBtn('▶', 'resume')) + (m.pl ? sndBtn('⏭', 'next') : '') + sndBtn('⏹', 'stop') + sndBtn('🔊 Son', 'open') + sndProg(false);
+mini.className = m.aid ? '' : 'idle';
+if (show) {
+var mvol = '<input type="range" class="smvol" min="0" max="100" value="' + Math.round(snd.mv * 100) + '" data-sndv="mv" aria-label="Mon volume de la musique">';
+var mmute = '<button type="button" class="btn sm' + (snd.muted ? ' armed' : '') + '" data-snd="mute" aria-pressed="' + (snd.muted ? 'true' : 'false') + '" aria-label="' + (snd.muted ? 'Remettre mon son' : 'Couper mon son') + '">' + (snd.muted ? '🔇' : '🔊') + '</button>';
+var mttl = m.aid ? esc(m.name || 'Musique') + (m.playing ? '' : ' (en pause)') : '<span class="smidle">Rien en cours</span>';
+var mh = '<div class="smhead"><span class="eq' + (m.aid && m.playing ? ' on' : '') + '" aria-hidden="true"><i></i><i></i><i></i></span><b>' + mttl + '</b>' + (mj || snd.on ? mmute : '') + sndBtn('🎵 Son', 'open') + '</div>';
+if (mj && m.aid) mh += '<div class="smctl">' + (m.pl ? sndBtn('⏮', 'prev') : '') + (m.playing ? sndBtn('⏸', 'pause', undefined, 'primary') : sndBtn('▶', 'resume', undefined, 'primary')) + (m.pl ? sndBtn('⏭', 'next') : '') + sndBtn('⏹', 'stop') + mvol + '</div>';
+else if (!mj && snd.on) mh += '<div class="smctl">' + mvol + '</div>';
+else if (!mj) mh += '<div class="smctl">' + sndBtn('🔊 Toucher pour entendre le MJ', 'join', undefined, 'primary') + '</div>' + (snd.msg ? '<p class="smhint err">' + esc(snd.msg) + '</p>' : '');
+mini.innerHTML = mh;
+}
 }
 if (mjEl && mj) {
 var cats = []; SFX.forEach(function (x) { if (cats.indexOf(x[2]) < 0) cats.push(x[2]); });

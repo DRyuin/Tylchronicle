@@ -61,6 +61,7 @@
 <header class="bar" id="pbar" hidden>
   <div class="brand"><svg class="mark" viewBox="11.5 9.3 42.6 42.6" aria-hidden="true"><circle cx="32.8" cy="30.6" r="20.4" fill="none" stroke="currentColor" stroke-width="0.9" opacity=".55"/><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M32.8 14.4V46.8" stroke-width="2.9"/><path d="M23.4 15.8C24.6 21.2 28.2 24.6 32.8 24.8C37.4 24.6 41 21.2 42.2 15.8"/><path d="M22.6 25.6C25 30.4 28.6 32.8 32.8 33C37 32.8 40.6 30.4 43 25.6"/><path d="M24 46.4C26.2 41.4 29 38.2 32.8 37.2C36.6 38.2 39.4 41.4 41.6 46.4"/></g></svg><div><h1>Tylchronicle</h1><span class="sub"><span class="pvsubl">Vue joueuse · </span><span id="psync" aria-live="polite">Chargement…</span><span class="pvsubl"> · </span><span id="pmj" class="mjdot"></span></span></div></div>
   <button class="btn" id="toMJ" type="button" hidden>Retour MJ</button>
+  <button class="btn" id="pvSndTop" type="button" aria-expanded="false" aria-controls="pvSndPop" aria-label="Son : musique et effets du MJ" title="Son : musique et effets du MJ"><span class="pvmi" aria-hidden="true">🔊</span><span class="pvml">Son</span></button>
   <details class="pvmenu" id="pvMenu"><summary class="btn" title="Aménager, règles, progression, musique" aria-label="Menu : aménager, règles, progression, musique"><span class="pvmi" aria-hidden="true">☰</span><span class="pvml">Menu</span></summary><div class="pvmenu-b" role="group" aria-label="Menu">
   <button class="btn" id="pvEditBtn" type="button" hidden aria-pressed="false" title="Déplacer les blocs, choisir leur onglet, couleur, taille et colonnes">🎛 Aménager</button>
   <button class="btn" id="pvRulesBtn" type="button" title="Règles de la table">📖 Règles</button>
@@ -117,10 +118,13 @@
   </div>
 </section>
 
+<div id="dockStack">
+<div id="sndMini" hidden></div>
 <aside id="jdock" aria-label="Journal">
   <button type="button" id="jdBtn" aria-expanded="false" aria-controls="log"><b>Journal</b><span id="jdLast"></span><i aria-hidden="true">▾</i></button>
   <ol class="log" id="log" aria-live="polite"></ol>
 </aside>
+</div>
 
 <div class="wrap" id="viewCombat">
   <aside class="side side-l">
@@ -455,7 +459,6 @@
 </div>
 
 <div id="cfBanner" hidden role="alert"></div>
-<div id="sndMini" hidden></div>
 <script src="supabase.js"></script>
 <script src="config.js"></script>
 <script src="shim.js"></script>

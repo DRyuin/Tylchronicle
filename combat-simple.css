@@ -52,7 +52,7 @@ body.cs-simple #list .card .cs-hidbtn[aria-pressed="true"] { background: var(--b
 @media (min-width: 1024px) { #csNextBar { display: none !important; } }
 @media (max-width: 1023px) {
   body.cs-simple.cs-mj #viewCombat:not([hidden]) { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
-  body.cs-simple.cs-mj:has(#csNextBar:not([hidden])) #jdock { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+  body.cs-simple.cs-mj:has(#csNextBar:not([hidden])) #dockStack { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
   body.cs-simple.cs-mj:has(#csNextBar:not([hidden])) #toast { bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
   body.cs-simple.cs-mj .turnctl #next { display: none; }
 }
