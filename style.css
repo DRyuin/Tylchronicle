@@ -2333,3 +2333,58 @@ header.mjbar::after { content: none; }
   #sndPanel .sndrow label { flex: 1 1 100%; }
   #sndPanel .sndprog input[type=range], #pvSnd .sndprog input[type=range] { min-height: 44px; }
 }
+
+/* Lot 3 son : carte « En cours », onglets Scènes / Musiques / Effets, favoris, bibliothèque repliée (touches >= 44 px) */
+#sndBody { gap: 12px; }
+.sndcard { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); min-width: 0; }
+.sndcard.on { border-color: var(--brass); box-shadow: 0 0 0 2px var(--brass-soft); }
+.sndch { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.sndcard .sndtitle { flex: 1; min-width: 0; font-family: var(--font-display); font-weight: 500; letter-spacing: .03em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sndsub { font-size: .8rem; color: var(--muted); overflow-wrap: anywhere; }
+.sndctl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sndctl .btn.sndbig { width: 56px; height: 56px; min-height: 56px; min-width: 56px; border-radius: 50%; padding: 0; font-size: 1.4rem; background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+.sndctl .btn.sndrnd { width: 48px; height: 48px; min-height: 48px; min-width: 48px; border-radius: 50%; padding: 0; font-size: 1.1rem; }
+.sndctl2 { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn.sndtog { min-height: 44px; border-radius: 22px; padding: 0 14px; }
+.btn.sndtog[aria-pressed="true"] { background: var(--brass-soft); border-color: var(--brass); color: var(--brass-ink); font-weight: 700; }
+.sndvols { display: flex; flex-wrap: wrap; gap: 10px; }
+.sndvols label { flex: 1 1 140px; display: flex; flex-direction: column; gap: 2px; font-size: .78rem; color: var(--muted); min-width: 0; }
+.sndvols input[type=range] { width: 100%; min-height: 36px; margin: 0; }
+.sndmine { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: .82rem; color: var(--muted); }
+.sndcard .sndseekbtns { flex-wrap: wrap; }
+.sndtabs { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--surface-2); }
+.sndtabs [role=tab] { flex: 1 1 0; min-width: 0; min-height: 44px; border: 0; border-radius: 9px; background: transparent; color: var(--ink); font: inherit; font-weight: 500; cursor: pointer; }
+.sndtabs [role=tab][aria-selected="true"] { background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.18); color: var(--brass-ink); font-weight: 700; }
+.sndtabs [role=tab]:focus-visible, .sndchip:focus-visible, .sndst:focus-visible, .sndgo:focus-visible, .sndfx:focus-visible, .sndtile:focus-visible, #sndLibBtn:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+.sndpan[hidden] { display: none !important; }
+.sndpan { gap: 10px; min-width: 0; }
+.sndlbl { font-family: var(--font-display); font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+.sndtiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.sndtile { min-height: 72px; min-width: 0; border-radius: 14px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); padding: 8px; text-align: left; display: flex; flex-direction: column; justify-content: space-between; gap: 2px; font: inherit; cursor: pointer; }
+.sndtile .ic { font-size: 1.3rem; line-height: 1.1; }
+.sndtile .nm { font-weight: 700; font-size: .95rem; line-height: 1.15; overflow-wrap: anywhere; }
+.sndtile .sb { font-size: .72rem; color: var(--muted); }
+.sndtile.cur { background: var(--brass-soft); border-color: var(--brass); }
+.sndtile:disabled { opacity: .55; cursor: default; }
+.sndtile:active:not(:disabled) { transform: scale(.97); }
+.sndfav, .sndfxg { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.sndempty { margin: 0; font-size: .85rem; color: var(--muted); grid-column: 1 / -1; }
+.sndfxc { display: flex; align-items: stretch; gap: 2px; min-width: 0; }
+.sndfx { flex: 1 1 0; min-width: 0; min-height: 52px; padding: 4px 8px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font: inherit; font-size: .88rem; font-weight: 500; line-height: 1.15; cursor: pointer; overflow-wrap: anywhere; }
+.sndfx.fl, .sndfx:active { background: var(--brass-soft); border-color: var(--brass); }
+.sndfx.cur { border-color: var(--brass); }
+.sndst { flex: none; width: 44px; min-height: 44px; border: 0; background: transparent; color: var(--brass); font-size: 1.15rem; cursor: pointer; }
+.sndsearch { width: 100%; min-height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; }
+.sndchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sndchip { min-height: 44px; padding: 0 14px; border-radius: 22px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font: inherit; cursor: pointer; }
+.sndchip[aria-pressed="true"] { background: var(--brass-soft); border-color: var(--brass); color: var(--brass-ink); font-weight: 700; }
+.sndrows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.sndrw { display: flex; align-items: center; gap: 4px; min-height: 52px; padding: 0 4px 0 2px; border-radius: 12px; background: var(--surface-2); min-width: 0; }
+.sndrw.cur { outline: 2px solid var(--brass); background: var(--brass-soft); }
+.sndrw .n { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
+.sndrw .d { font-size: .75rem; color: var(--muted); }
+.sndrw.empty { padding: 8px 12px; color: var(--muted); }
+.sndgo { flex: none; width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--primary); color: var(--on-primary); font-size: 1rem; cursor: pointer; }
+.btn.sndlibbtn { min-height: 44px; justify-content: flex-start; text-align: left; }
+#sndLib { gap: 10px; padding-top: 4px; }
+@media (max-width: 700px) { #sndPanel .sndtile, #sndPanel .sndfx { min-height: 52px; } #sndPanel .sndtile { min-height: 72px; } }

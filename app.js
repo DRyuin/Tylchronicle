@@ -10283,9 +10283,11 @@ document.addEventListener('change', function (ev) { var t = ev.target; if (t && 
 document.addEventListener('toggle', function (ev) { var t = ev.target; if (t && t.classList && t.classList.contains('pnote') && t.getAttribute('data-nid') && true) { if (role === 'joueur') nt.open[t.getAttribute('data-nid')] = t.open; else ntMj.open[t.getAttribute('data-nid')] = t.open; } }, true);
 
 var SND_LS = 'tylchronicle-snd-v1';
-var snd = { ctx: null, on: false, muted: false, mv: 0.8, fv: 0.9, au: null, cur: '', st: null, lastFx: null, tracks: [], pls: [], plCol: null, pe: null, docRef: null, tkCol: null, assets: null, msg: '', sig: '', busy: false, res: {}, loading: {}, fail: {}, skew: 0, lead: 1000, tm: 0, syncCol: null, ans: {}, samples: [], pend: 0, syncOn: false, pq: false };
-try { var sv = JSON.parse(localStorage.getItem(SND_LS) || '{}'); if (typeof sv.mv === 'number') snd.mv = sv.mv; if (typeof sv.fv === 'number') snd.fv = sv.fv; if (typeof sv.lead === 'number') snd.lead = sv.lead; } catch (e) { /* ignoré */ }
-function sndSaveLocal() { try { localStorage.setItem(SND_LS, JSON.stringify({ mv: snd.mv, fv: snd.fv, lead: snd.lead })); } catch (e) { /* ignoré */ } }
+var snd = { ctx: null, on: false, muted: false, mv: 0.8, fv: 0.9, au: null, cur: '', st: null, lastFx: null, tracks: [], pls: [], plCol: null, pe: null, docRef: null, tkCol: null, assets: null, msg: '', sig: '', busy: false, res: {}, loading: {}, fail: {}, skew: 0, lead: 1000, tm: 0, syncCol: null, ans: {}, samples: [], pend: 0, syncOn: false, pq: false, fav: [], tab: 'scenes', fade: true, lib: false, q: '', mf: 'all', xc: 'all', ft: 0, chgTm: 0, chgAt: 0 };
+var SND_FADE = 1500, SND_TABS = ['scenes', 'musiques', 'effets'];
+try { var sv = JSON.parse(localStorage.getItem(SND_LS) || '{}'); if (typeof sv.mv === 'number') snd.mv = sv.mv; if (typeof sv.fv === 'number') snd.fv = sv.fv; if (typeof sv.lead === 'number') snd.lead = sv.lead;
+if (Array.isArray(sv.fav)) snd.fav = sv.fav.filter(function (x) { return typeof x === 'string'; }).slice(0, 200); if (SND_TABS.indexOf(sv.tab) >= 0) snd.tab = sv.tab; if (typeof sv.fade === 'boolean') snd.fade = sv.fade; } catch (e) { /* ignoré */ }
+function sndSaveLocal() { try { localStorage.setItem(SND_LS, JSON.stringify({ mv: snd.mv, fv: snd.fv, lead: snd.lead, fav: snd.fav, tab: snd.tab, fade: snd.fade })); } catch (e) { /* ignoré */ } }
 function sndCtx() { if (!snd.ctx) { var C = window.AudioContext || window.webkitAudioContext; if (C) { try { snd.ctx = new C(); } catch (e) { snd.ctx = null; } } } return snd.ctx; }
 function sTone(c, t0, f0, f1, dur, type, g, dst) {
 var o = c.createOscillator(), gn = c.createGain();
@@ -10345,14 +10347,43 @@ if (pa && t < pa) return { play: true, pos: Math.max(0, off - (pa - t) / 1000), 
 return { play: false, pos: off };
 }
 function sndEl(m) { return sndEff(m).pos; }
-function sndPause(stop) {
-var m = (snd.st || {}).music || {}; if (!m.aid) return;
-var at = sndAt(), e = sndEff(m), off = e.play ? e.pos + (at - snow()) / 1000 : e.pos, d = sndDur(m);
-if (stop && !e.play) { clearTimeout(snd.stopTm); sndWrite({ music: { aid: '', name: '', playing: false } }); return; }
-if (m.loop && d > 0) off = off % d;
-sndWrite({ music: Object.assign({}, m, { playing: false, offset: off, pauseAt: at }) });
-if (stop) { clearTimeout(snd.stopTm); snd.stopTm = setTimeout(function () { var cm = (snd.st || {}).music || {}; if (cm.aid === m.aid && !cm.playing && cm.pauseAt === at) sndWrite({ music: { aid: '', name: '', playing: false } }); }, Math.max(0, at - snow()) + 150); }
+function sndFadeMs() { return snd.fade ? SND_FADE : 0; }
+function sndGain(m) {
+var f = +m.fade || 0; if (f <= 0) return 1;
+var t = snow(), pa = int(m.pauseAt, 0), sa = int(m.startedAt, 0);
+if (!m.playing) return pa && t < pa ? Math.max(0, Math.min(1, (pa - t) / f)) : 1;
+if (!(+m.offset > 0)) return Math.max(0, Math.min(1, (t - sa) / f));
+return 1;
 }
+function sndFading(m) {
+var f = +m.fade || 0; if (f <= 0) return false;
+var t = snow();
+if (!m.playing) return int(m.pauseAt, 0) > t;
+return !(+m.offset > 0) && t < int(m.startedAt, 0) + f;
+}
+function sndPause(stop, fade) {
+var m = (snd.st || {}).music || {}; if (!m.aid) return;
+var at = sndAt(), e = sndEff(m), off, d = sndDur(m), f = fade && e.play && m.playing ? sndFadeMs() : 0;
+if (stop && (!e.play || (!m.playing && int(m.pauseAt, 0) > snow()))) { clearTimeout(snd.stopTm); sndWrite({ music: { aid: '', name: '', playing: false } }); return; }
+var atF = at + f; off = e.play ? e.pos + (atF - snow()) / 1000 : e.pos;
+if (m.loop && d > 0) off = off % d;
+var nm = Object.assign({}, m, { playing: false, offset: off, pauseAt: atF }); if (f) nm.fade = f; else delete nm.fade;
+sndWrite({ music: nm });
+if (stop) { clearTimeout(snd.stopTm); snd.stopTm = setTimeout(function () { var cm = (snd.st || {}).music || {}; if (cm.aid === m.aid && !cm.playing && cm.pauseAt === atF) sndWrite({ music: { aid: '', name: '', playing: false } }); }, Math.max(0, atF - snow()) + 150); }
+}
+/* Changement de morceau : l'ancien s'éteint en fondu, puis le nouveau entre en fondu (go reçoit la durée d'entrée, 0 = sans fondu). */
+function sndSwitch(go) {
+var m = (snd.st || {}).music || {}, f = sndFadeMs(), e = m.aid ? sndEff(m) : null;
+if (snd.chgTm) { clearTimeout(snd.chgTm); snd.chgTm = 0; snd.chgGo = go; snd.chgTm = setTimeout(function () { snd.chgTm = 0; snd.chgGo(f); }, Math.max(0, snd.chgAt - Date.now())); return; }
+if (!f) { go(0); return; }
+if (m.aid && m.playing && e && e.play) {
+sndPause(false, true); snd.chgGo = go; snd.chgAt = Date.now() + f + 40;
+snd.chgTm = setTimeout(function () { snd.chgTm = 0; snd.chgGo(f); }, f + 40);
+return;
+}
+go(f);
+}
+function sndCancelSwitch() { if (snd.chgTm) { clearTimeout(snd.chgTm); snd.chgTm = 0; } }
 function fmtT(s) { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2); }
 function sndDur(m) { var a = snd.au; if (a && snd.cur === (window.TYL_BLOB || '/_blob/') + m.aid && isFinite(a.duration) && a.duration > 0) return a.duration; return +m.dur || 0; }
 function sndProg(ro) { return '<div class="sndprog" data-prog><span data-pt>0:00</span><input type="range" min="0" max="1000" value="0" data-sndseek' + (ro ? ' data-ro="1" disabled' : ' disabled') + ' aria-label="Position dans la musique"><span data-pd>--:--</span></div>'; }
@@ -10385,7 +10416,9 @@ if (enc === 'b64') { var rs = snd.res[m.aid]; if (!rs) { try { a.pause(); } catc
 a.src = real; snd.cur = src; try { a.load(); } catch (e) { /* ignoré */ }
 }
 a.loop = !!m.loop;
-a.volume = snd.muted ? 0 : Math.max(0, Math.min(1, snd.mv * (typeof m.vol === 'number' ? m.vol : 0.8)));
+var gn = sndGain(m);
+a.volume = snd.muted ? 0 : Math.max(0, Math.min(1, snd.mv * (typeof m.vol === 'number' ? m.vol : 0.8) * gn));
+clearTimeout(snd.ft); if (sndFading(m)) snd.ft = setTimeout(sndApply, 80);
 var e = sndEff(m), el = e.pos, dur = a.duration;
 clearTimeout(snd.tm); if (e.next) snd.tm = setTimeout(sndApply, Math.max(10, e.next - snow() + 8));
 var over = false;
@@ -10520,20 +10553,32 @@ pa.src = probeUrl;
 setTimeout(function () { if (!done) { done = true; URL.revokeObjectURL(probeUrl); fail('Le navigateur n\'arrive pas à lire ce fichier.'); } }, 15000);
 }
 function plTracks(pl) { return (pl && pl.tids || []).map(function (id) { return snd.tracks.filter(function (t) { return t.id === id; })[0]; }).filter(Boolean); }
-function plPlay(pl, idx, nolead) {
+function plPlay(pl, idx, nolead, fadeIn) {
 var list = plTracks(pl), t = list[idx], m = (snd.st || {}).music || {};
 if (!t) { snd.msg = 'Cette playlist est vide.'; snd.sig = ''; renderSnd(); return; }
-sndWrite({ music: { aid: t.aid, name: t.name, enc: t.enc || '', mt: t.mt || '', dur: +t.dur || 0, loop: false, playing: true, startedAt: nolead ? snow() : sndAt(), pauseAt: 0, offset: 0, vol: typeof m.vol === 'number' ? m.vol : 0.8, pl: pl.id, idx: idx } });
+var nm = { aid: t.aid, name: t.name, enc: t.enc || '', mt: t.mt || '', dur: +t.dur || 0, loop: false, playing: true, startedAt: nolead ? snow() : sndAt(), pauseAt: 0, offset: 0, vol: typeof m.vol === 'number' ? m.vol : 0.8, pl: pl.id, idx: idx };
+if (fadeIn) nm.fade = fadeIn;
+sndWrite({ music: nm });
+}
+function trackPlay(t, fadeIn) {
+var m = (snd.st || {}).music || {};
+var nm = { aid: t.aid, name: t.name, enc: t.enc || '', mt: t.mt || '', dur: +t.dur || 0, loop: m.loop !== false, playing: true, startedAt: sndAt(), pauseAt: 0, offset: 0, vol: typeof m.vol === 'number' ? m.vol : 0.8 };
+if (fadeIn) nm.fade = fadeIn;
+sndWrite({ music: nm });
 }
 function sndAdvance(dir, auto) {
 var m = (snd.st || {}).music || {}, pl = snd.pls.filter(function (x) { return x.id === m.pl; })[0];
-if (!pl) return;
+if (!pl) {
+var ti = -1, n0 = snd.tracks.length; snd.tracks.forEach(function (t, i) { if (t.aid === m.aid) ti = i; });
+if (!m.aid || n0 < 2 || ti < 0) return;
+var nt = snd.tracks[(ti + dir + n0) % n0]; sndSwitch(function (f) { trackPlay(nt, f); }); return;
+}
 var n = plTracks(pl).length; if (!n) return;
 var idx = int(m.idx, 0) + dir;
 if (pl.shuf && n > 1) { do { idx = Math.floor(Math.random() * n); } while (idx === int(m.idx, 0)); }
 else if (idx >= n) { if (pl.loop || !auto) idx = 0; else { sndWrite({ music: { aid: '', name: '', playing: false } }); return; } }
 else if (idx < 0) idx = n - 1;
-plPlay(pl, idx, !!auto);
+if (auto) plPlay(pl, idx, true); else sndSwitch(function (f) { plPlay(pl, idx, false, f); });
 }
 function sndPlNow(m) {
 if (!m.pl) return '';
@@ -10572,9 +10617,9 @@ else if (f && a === 'pladd') { var sel = $('sndPa'); if (sel && sel.value) { f.n
 else if (f && (a === 'plup' || a === 'pldn' || a === 'plrm')) { f.name = ($('sndPn') || {}).value || f.name; if (a === 'plrm') f.tids.splice(i, 1); else { var j = a === 'plup' ? i - 1 : i + 1; if (j >= 0 && j < f.tids.length) { var tmp = f.tids[i]; f.tids[i] = f.tids[j]; f.tids[j] = tmp; } } renderSndPe(); }
 else if (f && a === 'plloop') { f.name = ($('sndPn') || {}).value || f.name; f.loop = !f.loop; renderSndPe(); }
 else if (f && a === 'plshuf') { f.name = ($('sndPn') || {}).value || f.name; f.shuf = !f.shuf; renderSndPe(); }
-else if (a === 'plplay') { if (pl) plPlay(pl, pl.shuf ? Math.floor(Math.random() * Math.max(1, plTracks(pl).length)) : 0); }
+else if (a === 'plplay') { if (pl) { var i0 = pl.shuf ? Math.floor(Math.random() * Math.max(1, plTracks(pl).length)) : 0; sndSwitch(function (f) { plPlay(pl, i0, false, f); }); } }
 else if (a === 'pldel') { if (!confirmed('pldel:' + v)) return; if (snd.plCol) { try { snd.plCol.doc(v).delete(); } catch (e) { /* ignoré */ } } snd.pls = snd.pls.filter(function (x) { return x.id !== v; }); snd.sig = ''; renderSnd(); }
-else if (a === 'plgo') { var cm = (snd.st || {}).music || {}, pp = snd.pls.filter(function (x) { return x.id === cm.pl; })[0]; if (pp && i >= 0) plPlay(pp, i); }
+else if (a === 'plgo') { var cm = (snd.st || {}).music || {}, pp = snd.pls.filter(function (x) { return x.id === cm.pl; })[0]; if (pp && i >= 0) sndSwitch(function (f) { plPlay(pp, i, false, f); }); }
 else if (a === 'next') sndAdvance(1, false);
 else if (a === 'prev') sndAdvance(-1, false);
 }
@@ -10587,6 +10632,7 @@ if (on) { var mn = $('pvMenu'); if (mn) mn.open = false; }
 function sndAct(a, v) {
 var st = snd.st || {}, m = st.music || {};
 if (a === 'join') { sndJoin(); return; }
+if (role !== 'joueur' && (a === 'fav' || a === 'tab' || a === 'lib' || a === 'fade' || a === 'xcat' || a === 'mflt')) { sndUiAct(a, v); return; }
 if (a === 'open' && role === 'joueur') { pvSndOpen(true); return; }
 if (a === 'open') { try { $('tabCombat').click(); var pn = $('sndPanel'); if (pn) { pn.open = true; pn.scrollIntoView({ block: 'start' }); } } catch (e) { /* ignoré */ } return; }
 if (/^(pl(?!ay$)|next$|prev$)/.test(a)) { if (role !== 'joueur') { if (!snd.on) sndJoin(); sndPlAct(a, v); } return; }
@@ -10594,18 +10640,134 @@ if (a === 'mute') { snd.muted = !snd.muted; sndApply(); renderSnd(); return; }
 if (role === 'joueur' && a !== 'x') return;
 if (!snd.on) sndJoin();
 if (a === 'fx') { sndFx(v); sndWrite({ fx: { k: v, seq: Date.now() + Math.random(), at: snow() } }); }
-else if (a === 'play') { var t = snd.tracks.filter(function (x) { return x.id === v; })[0]; if (t) sndWrite({ music: { aid: t.aid, name: t.name, enc: t.enc || '', mt: t.mt || '', dur: +t.dur || 0, loop: m.loop !== false, playing: true, startedAt: sndAt(), pauseAt: 0, offset: 0, vol: typeof m.vol === 'number' ? m.vol : 0.8 } }); }
-else if (a === 'pause') sndPause(false);
+else if (a === 'play') { var t = snd.tracks.filter(function (x) { return x.id === v; })[0]; if (t) sndSwitch(function (f) { trackPlay(t, f); }); }
+else if (a === 'pause') { sndCancelSwitch(); sndPause(false); }
 else if (a === 'resume') { if (m.aid) sndWrite({ music: Object.assign({}, m, { playing: true, startedAt: sndAt(), pauseAt: 0 }) }); }
 else if (a === 'seek') { if (m.aid) sndSeek(sndEl(m) + (+v || 0)); }
-else if (a === 'stop') { if (m.aid) sndPause(true); }
+else if (a === 'stop') { sndCancelSwitch(); if (m.aid) sndPause(true, true); }
 else if (a === 'loop') { if (m.aid) sndWrite({ music: Object.assign({}, m, { loop: !m.loop, startedAt: snow(), pauseAt: 0, offset: sndEl(m) }) }); }
 else if (a === 'tdel') { if (!confirmed('tdel:' + v)) return; if (snd.tkCol) { try { snd.tkCol.doc(v).delete(); } catch (e) { /* ignoré */ } } snd.tracks = snd.tracks.filter(function (x) { return x.id !== v; }); renderSnd(); }
 }
 function sndBtn(l, a, v, cls, dis) { return '<button type="button" class="btn sm ' + (cls || '') + '" data-snd="' + a + '"' + (v !== undefined ? ' data-v="' + esc(v) + '"' : '') + (dis ? ' disabled' : '') + '>' + l + '</button>'; }
+/* ---- Lot 3 son : carte « En cours », onglets, favoris, bibliothèque repliée ---- */
+function sndIcon(n) {
+var x = String(n || '').toLowerCase(), r = [[/tavern|auberge|bar\b|festin/, '🍺'], [/combat|bataille|guerre|boss|duel/, '⚔'], [/for[êe]t|bois|nature/, '🌲'], [/march[ée]|ville|bourg|village/, '🏪'], [/donjon|cave|crypte|grotte|souterrain/, '🗝'], [/mer\b|port|navire|bateau|oc[ée]an/, '⛵'], [/magie|myst|temple|sanctuaire/, '✨'], [/nuit|lune|veill/, '🌙'], [/triste|deuil|mort|fun[èe]bre/, '🕯']], i;
+for (i = 0; i < r.length; i++) if (r[i][0].test(x)) return r[i][1];
+return '🎵';
+}
+function sndFavHas(k) { return snd.fav.indexOf(k) >= 0; }
+function sndStar(k, label) {
+var on = sndFavHas(k);
+return '<button type="button" class="sndst' + (on ? ' on' : '') + '" data-snd="fav" data-v="' + esc(k) + '" aria-pressed="' + (on ? 'true' : 'false') + '" aria-label="' + esc((on ? 'Retirer des favoris : ' : 'Ajouter aux favoris : ') + label) + '">' + (on ? '★' : '☆') + '</button>';
+}
+function sndFocusKey(root) {
+var a = document.activeElement; if (!a || !root || !root.contains(a) || a === root) return null;
+var pn = a.closest ? a.closest('[role=tabpanel]') : null;
+return { id: a.id || '', sn: a.getAttribute('data-snd') || '', v: a.getAttribute('data-v') || '', pn: pn ? pn.id : '' };
+}
+function sndFocusBack(root, k) {
+if (!k) return;
+var e = null;
+if (k.id) e = document.getElementById(k.id);
+if (!e && k.sn) { var sc = k.pn ? document.getElementById(k.pn) || root : root, q = sc.querySelectorAll('[data-snd="' + k.sn + '"]'), i; for (i = 0; i < q.length; i++) if ((q[i].getAttribute('data-v') || '') === k.v) { e = q[i]; break; } }
+if (e && e.focus && !e.disabled) { try { e.focus(); } catch (x) { /* ignoré */ } }
+}
+function sndTrackRows() {
+var q = String(snd.q || '').toLowerCase().trim(), m = (snd.st || {}).music || {}, inPl = {};
+snd.pls.forEach(function (p) { (p.tids || []).forEach(function (id) { inPl[id] = 1; }); });
+var list = snd.tracks.filter(function (t) { if (q && String(t.name).toLowerCase().indexOf(q) < 0) return false; if (snd.mf === 'fav') return sndFavHas('m:' + t.id); if (snd.mf === 'pl') return !!inPl[t.id]; return true; });
+if (!list.length) return '<li class="sndrw empty"><span class="n">' + (snd.tracks.length ? 'Aucune musique ne correspond.' : 'Aucune musique importée : ouvre « Gérer la bibliothèque ».') + '</span></li>';
+return list.map(function (t) { var cur = m.aid === t.aid;
+return '<li class="sndrw' + (cur ? ' cur' : '') + '">' + sndStar('m:' + t.id, t.name) + '<span class="n">' + esc(t.name) + '<span class="d">' + (+t.dur > 0 ? fmtT(+t.dur) : '') + (cur ? ' · en cours' : '') + '</span></span><button type="button" class="sndgo" data-snd="play" data-v="' + esc(t.id) + '" aria-label="' + esc('Lancer : ' + t.name) + '">▶</button></li>'; }).join('');
+}
+function sndCardHtml(m, st) {
+var has = !!m.aid, pl = m.pl ? snd.pls.filter(function (x) { return x.id === m.pl; })[0] : null, n = pl ? plTracks(pl).length : 0, canNav = has && (!!pl || snd.tracks.length > 1);
+var sub = has ? (pl ? 'Playlist « ' + esc(pl.name) + ' » · morceau ' + (int(m.idx, 0) + 1) + ' / ' + n : 'Morceau seul') + ' · les joueuses l\'entendent' : 'Rien en cours';
+var h = '<div class="sndcard' + (has && m.playing ? ' on' : '') + '" id="sndNow" role="group" aria-label="En cours">';
+h += '<div class="sndch"><span class="eq' + (has && m.playing ? ' on' : '') + '" aria-hidden="true"><i></i><i></i><i></i></span><b class="sndtitle">' + (has ? esc(m.name || 'Musique') + (m.playing ? '' : ' (en pause)') : 'Rien en cours') + '</b></div><div class="sndsub">' + sub + '</div>';
+h += '<div class="sndctl">' + sndBtn('⏮', 'prev', undefined, 'sndrnd', !canNav).replace('<button ', '<button aria-label="Morceau précédent" ') +
+(m.playing ? sndBtn('⏸', 'pause', undefined, 'sndbig').replace('<button ', '<button aria-label="Pause" ') : sndBtn('▶', 'resume', undefined, 'sndbig', !has).replace('<button ', '<button aria-label="Lecture" ')) +
+sndBtn('⏭', 'next', undefined, 'sndrnd', !canNav).replace('<button ', '<button aria-label="Morceau suivant" ') +
+sndBtn('⏹', 'stop', undefined, 'sndrnd', !has).replace('<button ', '<button aria-label="Arrêter la musique (en fondu)" ') + '</div>';
+h += '<div class="sndctl2">' + (has && !pl ? '<button type="button" class="btn sndtog" data-snd="loop" aria-pressed="' + (m.loop ? 'true' : 'false') + '">🔁 Boucle : ' + (m.loop ? 'oui' : 'non') + '</button>' : '') +
+'<button type="button" class="btn sndtog" data-snd="fade" aria-pressed="' + (snd.fade ? 'true' : 'false') + '">🌫 Fondu : ' + (snd.fade ? 'oui' : 'non') + '</button></div>';
+h += sndProg(false) + (has ? '<div class="sndseekbtns">' + sndBtn('⏪ 15 s', 'seek', '-15') + sndBtn('15 s ⏩', 'seek', '15') + '</div>' : '');
+h += '<div class="sndvols"><label>Musique (joueuses) <input type="range" min="0" max="100" value="' + Math.round((typeof m.vol === 'number' ? m.vol : 0.8) * 100) + '" data-sndv="mjm"></label><label>Effets (joueuses) <input type="range" min="0" max="100" value="' + Math.round((typeof st.fvol === 'number' ? st.fvol : 0.8) * 100) + '" data-sndv="mjf"></label></div>';
+h += '<div class="sndmine"><span>Mon écoute : ' + (snd.on ? (snd.muted ? 'coupée' : 'active') : 'pas activée') + '</span>' + (snd.on ? sndBtn(snd.muted ? '🔇 Son coupé' : '🔊 Couper', 'mute', undefined, snd.muted ? 'armed' : '') : sndBtn('🔊 Activer mon son', 'join', undefined, 'primary')) + '</div>';
+if (snd.msg) h += '<p class="hint err">' + esc(snd.msg) + '</p>';
+return h + '</div>';
+}
+function sndTabsHtml(m, st) {
+var cats = []; SFX.forEach(function (x) { if (cats.indexOf(x[2]) < 0) cats.push(x[2]); });
+var names = { scenes: 'Scènes', musiques: 'Musiques', effets: 'Effets' };
+var h = '<div class="sndtabs" role="tablist" aria-label="Contenu du son">' + SND_TABS.map(function (k) { var on = snd.tab === k;
+return '<button type="button" role="tab" id="sndTab-' + k + '" aria-selected="' + (on ? 'true' : 'false') + '" aria-controls="sndPan-' + k + '" tabindex="' + (on ? '0' : '-1') + '" data-snd="tab" data-v="' + k + '">' + names[k] + '</button>'; }).join('') + '</div>';
+/* Scènes : playlists en tuiles, silence, favoris */
+var tiles = snd.pls.map(function (pl) { var cur = m.pl === pl.id, n = plTracks(pl).length;
+return '<button type="button" class="sndtile' + (cur ? ' cur' : '') + '" data-snd="plplay" data-v="' + esc(pl.id) + '"' + (cur ? ' aria-current="true"' : '') + '><span class="ic" aria-hidden="true">' + sndIcon(pl.name) + '</span><span class="nm">' + esc(pl.name) + '</span><span class="sb">' + n + ' morceau' + (n > 1 ? 'x' : '') + (pl.loop ? ' · boucle' : '') + (pl.shuf ? ' · aléatoire' : '') + '</span></button>'; }).join('');
+tiles += '<button type="button" class="sndtile sil" data-snd="stop"' + (m.aid ? '' : ' disabled') + '><span class="ic" aria-hidden="true">🤫</span><span class="nm">Silence</span><span class="sb">' + (snd.fade ? 'en fondu' : 'arrêt net') + '</span></button>';
+var favs = snd.fav.map(function (k) {
+if (k.indexOf('m:') === 0) { var t = snd.tracks.filter(function (x) { return x.id === k.slice(2); })[0]; return t ? '<button type="button" class="sndfx mus' + (m.aid === t.aid ? ' cur' : '') + '" data-snd="play" data-v="' + esc(t.id) + '"><span aria-hidden="true">♪</span> ' + esc(t.name) + '</button>' : ''; }
+var d = k.indexOf('x:') === 0 ? SFX.filter(function (x) { return x[0] === k.slice(2); })[0] : null; return d ? '<button type="button" class="sndfx" data-snd="fx" data-v="' + d[0] + '"><span aria-hidden="true">✦</span> ' + esc(d[1]) + '</button>' : '';
+}).join('');
+var sc = '<div class="sndlbl">Scènes (une touche lance la playlist)</div><div class="sndtiles">' + tiles + '</div>' + (snd.pls.length ? '' : '<p class="sndempty">Aucune scène : crée une playlist dans « Gérer la bibliothèque ».</p>') + sndPlNow(m) +
+'<div class="sndlbl">Favoris</div><div class="sndfav" id="sndFav">' + (favs ? favs : '<p class="sndempty">Touche l\'étoile ☆ d\'une musique ou d\'un effet pour l\'ajouter ici.</p>') + '</div>';
+/* Musiques */
+var mu = '<input type="search" id="sndQ" class="sndsearch" placeholder="Chercher une musique…" aria-label="Chercher une musique" value="' + esc(snd.q) + '">' +
+'<div class="sndchips">' + [['all', 'Toutes'], ['fav', '★ Favoris'], ['pl', 'Dans une playlist']].map(function (o) { return '<button type="button" class="sndchip" data-snd="mflt" data-v="' + o[0] + '" aria-pressed="' + (snd.mf === o[0] ? 'true' : 'false') + '">' + o[1] + '</button>'; }).join('') + '</div>' +
+'<ul class="sndrows" id="sndTrList">' + sndTrackRows() + '</ul>';
+/* Effets */
+var list = SFX.filter(function (x) { return snd.xc === 'all' || (snd.xc === 'fav' ? sndFavHas('x:' + x[0]) : x[2] === snd.xc); });
+list = list.filter(function (x) { return sndFavHas('x:' + x[0]); }).concat(list.filter(function (x) { return !sndFavHas('x:' + x[0]); }));
+var fxc = [['all', 'Tous'], ['fav', '★ Favoris']].concat(cats.map(function (c) { return [c, c]; }));
+var ef = '<div class="sndchips">' + fxc.map(function (o) { return '<button type="button" class="sndchip" data-snd="xcat" data-v="' + esc(o[0]) + '" aria-pressed="' + (snd.xc === o[0] ? 'true' : 'false') + '">' + esc(o[1]) + '</button>'; }).join('') + '</div>' +
+'<div class="sndfxg">' + (list.length ? list.map(function (x) { return '<div class="sndfxc"><button type="button" class="sndfx" data-snd="fx" data-v="' + x[0] + '">' + esc(x[1]) + '</button>' + sndStar('x:' + x[0], x[1]) + '</div>'; }).join('') : '<p class="sndempty">Aucun effet favori : touche l\'étoile d\'un effet.</p>') + '</div>';
+var pans = { scenes: sc, musiques: mu, effets: ef };
+return h + SND_TABS.map(function (k) { return '<div role="tabpanel" id="sndPan-' + k + '" class="sndpan stack" aria-labelledby="sndTab-' + k + '"' + (snd.tab === k ? '' : ' hidden') + '>' + pans[k] + '</div>'; }).join('');
+}
+function sndLibRender(mj, m, vols, leadSel) {
+var box = $('sndLibBox'); if (!box) return;
+box.hidden = !mj; if (!mj) return;
+var btn = $('sndLibBtn'), reg = $('sndLib'), body = $('sndLibBody');
+if (btn) { btn.setAttribute('aria-expanded', snd.lib ? 'true' : 'false'); btn.textContent = (snd.lib ? '▾ ' : '▸ ') + 'Gérer la bibliothèque'; }
+if (reg) reg.hidden = !snd.lib;
+if (!body || !snd.lib) return;
+var h = '<div class="sndlbl">Musiques</div>';
+h += snd.tracks.length ? '<ul class="sndtracks">' + snd.tracks.map(function (t) { return '<li><span>' + esc(t.name) + '</span>' + sndBtn('▶ Lancer', 'play', t.id, m.aid === t.aid ? 'primary' : '') + sndBtn(armed === 'tdel:' + t.id ? 'Confirmer ?' : 'Supprimer', 'tdel', t.id, 'danger' + (armed === 'tdel:' + t.id ? ' armed' : '')) + '</li>'; }).join('') + '</ul>' : '<p class="hint">Aucune musique importée.</p>';
+h += snd.assets ? '<label class="wzf">Ajouter une musique (mp3, m4a, wav, ogg, flac… 14 Mo max)<input type="file" id="sndFile" accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac,.aac,.opus,.webm,.mp4"></label>' : '<p class="hint">Import de fichiers indisponible dans cette vue.</p>';
+h += '<div class="sndlbl">Playlists</div>' + (snd.pls.length ? '<ul class="sndtracks">' + snd.pls.map(function (pl) { return '<li><span><b>' + esc(pl.name) + '</b> <span class="hint">' + plTracks(pl).length + ' morceau(x)' + (pl.loop ? ' · boucle' : '') + (pl.shuf ? ' · aléatoire' : '') + '</span></span>' + sndBtn('▶ Lancer', 'plplay', pl.id, m.pl === pl.id ? 'primary' : '') + sndBtn('Modifier', 'pledit', pl.id) + sndBtn(armed === 'pldel:' + pl.id ? 'Confirmer ?' : 'Supprimer', 'pldel', pl.id, 'danger' + (armed === 'pldel:' + pl.id ? ' armed' : '')) + '</li>'; }).join('') + '</ul>' : '<p class="hint">Aucune playlist.</p>') + '<div class="btnrow">' + sndBtn('+ Nouvelle playlist', 'plnew') + '</div>';
+h += '<div class="sndlbl">Mon écoute et synchro</div>' + vols + leadSel;
+var fk = sndFocusKey(body); body.innerHTML = h; sndFocusBack(body, fk);
+}
+function sndFlash(k) {
+var q = '#sndBody [data-snd="fx"][data-v="' + k + '"]';
+Array.prototype.forEach.call(document.querySelectorAll(q), function (e) { e.classList.add('fl'); });
+setTimeout(function () { Array.prototype.forEach.call(document.querySelectorAll(q), function (e) { e.classList.remove('fl'); }); }, 1000);
+}
+function sndUiAct(a, v) {
+if (a === 'fav') { var i = snd.fav.indexOf(v); if (i >= 0) snd.fav.splice(i, 1); else if (snd.fav.length < 200) snd.fav.push(v); sndSaveLocal(); }
+else if (a === 'tab') { if (SND_TABS.indexOf(v) < 0) return; snd.tab = v; sndSaveLocal(); }
+else if (a === 'lib') snd.lib = !snd.lib;
+else if (a === 'fade') { snd.fade = !snd.fade; sndSaveLocal(); }
+else if (a === 'xcat') snd.xc = v || 'all';
+else if (a === 'mflt') snd.mf = v || 'all';
+snd.sig = ''; renderSnd();
+}
+document.addEventListener('keydown', function (ev) {
+var t = ev.target; if (!t || !t.getAttribute || t.getAttribute('role') !== 'tab' || !t.closest || !t.closest('#sndBody')) return;
+var i = SND_TABS.indexOf(String(t.getAttribute('data-v'))), n = SND_TABS.length, j = -1;
+if (ev.key === 'ArrowRight') j = (i + 1) % n; else if (ev.key === 'ArrowLeft') j = (i + n - 1) % n; else if (ev.key === 'Home') j = 0; else if (ev.key === 'End') j = n - 1;
+if (j < 0) return;
+ev.preventDefault(); snd.tab = SND_TABS[j]; sndSaveLocal(); snd.sig = ''; renderSnd();
+var e = $('sndTab-' + snd.tab); if (e) e.focus();
+});
+document.addEventListener('input', function (ev) {
+var t = ev.target; if (!t || t.id !== 'sndQ') return;
+snd.q = t.value; var ul = $('sndTrList'); if (ul) ul.innerHTML = sndTrackRows();
+});
 function renderSnd() {
 var mj = role !== 'joueur', st = snd.st || {}, m = st.music || {}, mjEl = $('sndBody'), pvEl = $('pvSnd');
-var sig = JSON.stringify([mj, snd.on, snd.muted, snd.mv, snd.fv, m.aid, m.playing, m.loop, m.vol, m.pl, m.idx, snd.pls.map(function (x) { return [x.id, x.name, x.tids, x.loop, x.shuf]; }), st.fvol, m.name, !!snd.docRef, snd.tracks.map(function (x) { return [x.id, x.name]; }), snd.msg, snd.busy, armed && /^(tdel|pldel):/.test(String(armed)) ? armed : '', !!snd.assets]);
+var sig = JSON.stringify([mj, snd.on, snd.muted, snd.mv, snd.fv, m.aid, m.playing, m.loop, m.vol, m.pl, m.idx, snd.pls.map(function (x) { return [x.id, x.name, x.tids, x.loop, x.shuf]; }), st.fvol, m.name, !!snd.docRef, snd.tracks.map(function (x) { return [x.id, x.name, x.dur]; }), snd.msg, snd.busy, armed && /^(tdel|pldel):/.test(String(armed)) ? armed : '', !!snd.assets, snd.fav, snd.tab, snd.fade, snd.lib, snd.mf, snd.xc, m.fade, !!(snd.chgTm)]);
 if (sig === snd.sig) return;
 snd.sig = sig;
 var leadSel = role !== 'joueur' ? '<div class="sndrow"><label>Délai de synchro avec les joueuses <select id="sndLead">' + [[0, 'aucun'], [500, '0,5 s'], [1000, '1 s'], [1500, '1,5 s'], [2500, '2,5 s']].map(function (o) { return '<option value="' + o[0] + '"' + (snd.lead === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label></div>' : '';
@@ -10631,24 +10793,15 @@ mini.innerHTML = mh;
 }
 }
 if (mjEl && mj) {
-var cats = []; SFX.forEach(function (x) { if (cats.indexOf(x[2]) < 0) cats.push(x[2]); });
-var h = '<p class="hint">Les joueuses entendent tout en direct (elles doivent avoir touché « Activer le son » une fois).</p>';
-h += '<h3>Musique</h3>';
-h += '<div class="sndrow sndnow">' + (m.aid ? '<span class="eq' + (m.playing ? ' on' : '') + '" aria-hidden="true"><i></i><i></i><i></i></span><b class="sndtitle">' + esc(m.name || '') + '</b> ' + (m.playing ? sndBtn('⏸ Pause', 'pause') : sndBtn('▶ Reprendre', 'resume')) + (m.pl ? sndBtn('⏮', 'prev') + sndBtn('⏭', 'next') : '') + sndBtn('⏹ Stop', 'stop') + (m.pl ? '' : sndBtn(m.loop ? '🔁 Boucle : oui' : '🔁 Boucle : non', 'loop')) + sndProg(false) + '<div class="sndseekbtns">' + sndBtn('⏪ 15 s', 'seek', '-15') + sndBtn('15 s ⏩', 'seek', '15') + '</div>' : '<span class="hint">Rien en cours.</span>') + '</div>';
-h += sndPlNow(m);
-h += '<div class="sndrow"><label>Volume musique (joueuses) <input type="range" min="0" max="100" value="' + Math.round((typeof m.vol === 'number' ? m.vol : 0.8) * 100) + '" data-sndv="mjm"></label><label>Volume effets (joueuses) <input type="range" min="0" max="100" value="' + Math.round((typeof st.fvol === 'number' ? st.fvol : 0.8) * 100) + '" data-sndv="mjf"></label></div>';
-h += snd.tracks.length ? '<ul class="sndtracks">' + snd.tracks.map(function (t) { return '<li><span>' + esc(t.name) + '</span>' + sndBtn('▶ Lancer', 'play', t.id, m.aid === t.aid ? 'primary' : '') + sndBtn(armed === 'tdel:' + t.id ? 'Confirmer ?' : 'Supprimer', 'tdel', t.id, 'danger' + (armed === 'tdel:' + t.id ? ' armed' : '')) + '</li>'; }).join('') + '</ul>' : '<p class="hint">Aucune musique importée.</p>';
-h += '<h3>Playlists</h3>' + (snd.pls.length ? '<ul class="sndtracks">' + snd.pls.map(function (pl) { return '<li><span><b>' + esc(pl.name) + '</b> <span class="hint">' + plTracks(pl).length + ' morceau(x)' + (pl.loop ? ' · boucle' : '') + (pl.shuf ? ' · aléatoire' : '') + '</span></span>' + sndBtn('▶ Lancer', 'plplay', pl.id, m.pl === pl.id ? 'primary' : '') + sndBtn('Modifier', 'pledit', pl.id) + sndBtn(armed === 'pldel:' + pl.id ? 'Confirmer ?' : 'Supprimer', 'pldel', pl.id, 'danger' + (armed === 'pldel:' + pl.id ? ' armed' : '')) + '</li>'; }).join('') + '</ul>' : '<p class="hint">Aucune playlist.</p>') + '<div class="btnrow">' + sndBtn('+ Nouvelle playlist', 'plnew') + '</div>';
-h += snd.assets ? '<label class="wzf">Ajouter une musique (mp3, m4a, wav, ogg, flac… 14 Mo max)<input type="file" id="sndFile" accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac,.aac,.opus,.webm,.mp4"></label>' : '<p class="hint">Import de fichiers indisponible dans cette vue.</p>';
-if (snd.msg) h += '<p class="hint err">' + esc(snd.msg) + '</p>';
-h += '<h3>Effets sonores</h3>' + cats.map(function (c) { return '<div class="sndcat"><b>' + esc(c) + '</b><div class="chips">' + SFX.filter(function (x) { return x[2] === c; }).map(function (x) { return sndBtn(esc(x[1]), 'fx', x[0]); }).join('') + '</div></div>'; }).join('');
-h += '<h3>Mon écoute</h3>' + (snd.on ? '' : '<div class="btnrow">' + sndBtn('🔊 Activer mon son', 'join', undefined, 'primary') + '</div>') + vols + leadSel;
-mjEl.innerHTML = h;
+var fk = sndFocusKey(mjEl);
+mjEl.innerHTML = sndCardHtml(m, st) + sndTabsHtml(m, st);
+sndFocusBack(mjEl, fk);
 } else if (mjEl) mjEl.innerHTML = '';
+sndLibRender(mj, m, vols, leadSel);
 }
 document.addEventListener('click', function (ev) {
 var b = ev.target && ev.target.closest ? ev.target.closest('[data-snd]') : null;
-if (b) sndAct(b.getAttribute('data-snd'), b.getAttribute('data-v'));
+if (b) { sndAct(b.getAttribute('data-snd'), b.getAttribute('data-v')); if (b.getAttribute('data-snd') === 'fx' && role !== 'joueur') sndFlash(b.getAttribute('data-v')); }
 });
 document.addEventListener('input', function (ev) {
 var t = ev.target; if (t && t.getAttribute && t.hasAttribute('data-sndseek')) { snd.seeking = true; snd.seekEl = t; sndTick(); }

@@ -331,7 +331,13 @@
 
     <details class="panel" id="sndPanel">
       <summary>🔊 Son et musique</summary>
-      <div class="pbody stack"><div id="sndPe"></div><div id="sndBody" class="stack"></div></div>
+      <div class="pbody stack">
+        <div id="sndBody" class="stack"></div>
+        <div id="sndLibBox" class="stack" hidden>
+          <button type="button" id="sndLibBtn" class="btn sndlibbtn" data-snd="lib" aria-expanded="false" aria-controls="sndLib">▸ Gérer la bibliothèque</button>
+          <div id="sndLib" class="stack" hidden><div id="sndPe"></div><div id="sndLibBody" class="stack"></div></div>
+        </div>
+      </div>
     </details>
 
     <details class="panel">
