@@ -2310,3 +2310,6 @@ header.mjbar::after { content: none; }
 .mjbar #next { flex: 1 1 auto; min-width: 0; max-width: 320px; }
 .mjbar .roundbox { min-width: 56px; }
 }
+/* Rappel de concentration (carte du MJ) : un bandeau par instance de dégâts */
+.conc-rem { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; padding: 4px 4px 4px 10px; border-radius: 8px; border: 1px solid var(--warn); background: var(--surface-2); font-size: .9rem; }
+.conc-rem .btn { min-height: 44px; min-width: 56px; flex: 0 0 auto; }

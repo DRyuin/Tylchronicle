@@ -47,6 +47,7 @@
       ds: { s: int(d.s, 0), f: int(d.f, 0) }, dsv: c.dsv ? 1 : 0, pw: plain(c.pw)
     };
     if (isObj(c.lg)) o.lg = { max: Math.max(1, int(c.lg.max, 3)), used: Math.max(0, int(c.lg.used, 0)) };
+    if (Array.isArray(c.cr) && c.cr.length) o.cr = c.cr.slice(-6).map(function (x) { return Math.max(1, Math.min(999, int(x, 10))); });   /* rappels de concentration (DD) : PJ et compagnons seulement */
     if (c.atk) o.atk = str(c.atk, 200);   /* attaques notées par le MJ sur la carte du PJ : armes de la page joueuse (C2) */
     if (c.cid) o.cid = str(c.cid, 40);
     return o;

@@ -99,11 +99,35 @@
     }
     return { total: total, expr: parts.join(''), detail: det.join(' ') };
   }
-  function attackRoll(bonus, rnd) {
+  /* mode : 'a' avantage (2d20, le meilleur), 'd' désavantage (2d20, le pire), sinon un seul d20. L'expression reste « 1d20+b » (le MJ la revalide telle quelle). */
+  function attackRoll(bonus, rnd, mode) {
     rnd = rnd || function (n) { return Math.floor(Math.random() * n) + 1; };
-    var b = isInt(bonus) ? Math.max(-50, Math.min(50, bonus)) : 0, nat = rnd(20);
-    return { nat: nat, total: nat + b, expr: '1d20' + (b < 0 ? '-' : '+') + Math.abs(b), detail: '1d20 [' + nat + '] ' + (b < 0 ? '-' : '+') + Math.abs(b) };
+    var b = isInt(bonus) ? Math.max(-50, Math.min(50, bonus)) : 0, x = rnd(20), y = mode === 'a' || mode === 'd' ? rnd(20) : null;
+    var nat = y == null ? x : mode === 'a' ? Math.max(x, y) : Math.min(x, y), sg = (b < 0 ? '-' : '+') + Math.abs(b);
+    return { nat: nat, total: nat + b, expr: '1d20' + sg, detail: y == null ? '1d20 [' + nat + '] ' + sg : '2d20 [' + x + ', ' + y + '] ' + (mode === 'a' ? 'avantage' : 'désavantage') + ' → ' + nat + ' ' + sg };
   }
+  /* états PROPRES du personnage qui donnent avantage / désavantage à ses jets d'attaque (mêmes règles et mêmes mots que le Complet : app.js arAuto, qui appelle cette fonction) */
+  function advSelf(c, exhOn) {
+    var A = [], D = [], cs = c && Array.isArray(c.conds) ? c.conds : [];
+    function h(x) { return cs.indexOf(x) >= 0; }
+    if (!c) return { a: A, d: D };
+    if (h('Aveuglé')) D.push('tu es aveuglé');
+    if (h('Empoisonné')) D.push('tu es empoisonné');
+    if (h('À terre') && c.hp > 0) D.push('tu es à terre');
+    if (h('Entravé')) D.push('tu es entravé');
+    if (h('Effrayé')) D.push('tu es effrayé (si ce qui te fait peur est en vue)');
+    if (exhOn && h('Épuisement') && (c.ex | 0) >= 3) D.push('tu es épuisé (niveau ' + (c.ex | 0) + ')');
+    if (h('Invisible')) A.push('tu es invisible');
+    return { a: A, d: D };
+  }
+  /* mode final : états propres + choix explicite (manual : 'a' | 'd' | 'n') ; avantage et désavantage s'annulent */
+  function advOf(c, exhOn, manual) {
+    var r = advSelf(c, exhOn), A = r.a.slice(), D = r.d.slice();
+    if (manual === 'a') A.push('avantage choisi'); else if (manual === 'd') D.push('désavantage choisi');
+    return { a: A, d: D, mode: A.length && D.length ? 'n' : A.length ? 'a' : D.length ? 'd' : 'n' };
+  }
+  /* critique : un 1 naturel ne l'est jamais ; sinon le dé atteint le seuil (20, ou 19 / 18 pour un Guerrier Champion) */
+  function isCrit(nat, cmin) { var m = isInt(cmin) ? Math.max(2, Math.min(20, cmin)) : 20; return isInt(nat) && nat !== 1 && nat >= m; }
 
   /* ---------- état lavé : ce que la page joueuse (et tout le code existant côté joueuse) a le droit de voir ---------- */
   function scrub(st) {
@@ -193,12 +217,16 @@
       if (h0 === a.hp && t0 === a.temp) return '';
       /* I1 : la joueuse envoie les PV qu'elle voyait ; si le MJ les a changés entre-temps, on refuse au lieu d'écraser */
       if ((has(a, 'base') && a.base !== h0) || (has(a, 'bt') && a.bt !== t0)) return 'PV changés entre-temps';
+      var cn = '';
       H.mutate(function () {
         var was = c.hp <= 0;
         c.hp = a.hp; c.temp = a.temp;
         if (was && c.hp > 0) c.ds = { s: 0, f: 0 };
+        /* PV perdus (PV temporaires compris) = des dégâts : rappel de concentration comme pour toute autre source */
+        var lost = Math.max(0, h0 - a.hp) + Math.max(0, t0 - a.temp);
+        if (lost > 0 && H.conc) cn = H.conc(c, lost);
       }, function () {
-        return c.name + ' corrige ses PV : ' + h0 + ' → ' + c.hp + '/' + c.max + (t0 !== c.temp ? ' (PV temp. ' + t0 + ' → ' + c.temp + ')' : '') + (c.hp <= 0 && h0 > 0 ? ', tombe à 0' : '');
+        return c.name + ' corrige ses PV : ' + h0 + ' → ' + c.hp + '/' + c.max + (t0 !== c.temp ? ' (PV temp. ' + t0 + ' → ' + c.temp + ')' : '') + (c.hp <= 0 && h0 > 0 ? ', tombe à 0' : '') + cn;
       });
     } else if (a.t === 'eco') {
       var setEco = function (x) {
@@ -210,7 +238,7 @@
       /* I2 : hors de la pile « Annuler » du MJ (H.quiet), sinon comportement d'avant */
       if (H.quiet) H.quiet(c, setEco); else H.mutate(function () { setEco(c); }, null);
     } else if (a.t === 'roll') {
-      H.logLine(c.name + ' lance ' + clean1(a.title, 60) + ' (' + clean1(a.expr, 40) + ') : ' + a.total + (a.nat === 20 ? ' · critique !' : a.nat === 1 ? ' · échec critique' : ''));
+      H.logLine(c.name + ' lance ' + clean1(a.title, 60) + ' (' + clean1(a.expr, 40) + ') : ' + a.total + (a.nat === 20 || (a.nat > 1 && H.critMin && /\(toucher\)$/.test(clean1(a.title, 60)) && isCrit(a.nat, H.critMin(c))) ? ' · critique !' : a.nat === 1 ? ' · échec critique' : ''));
     }
     return '';
   }
@@ -220,6 +248,9 @@
   api.take = take;
   api.rollDice = rollDice;
   api.attackRoll = attackRoll;
+  api.advSelf = advSelf;
+  api.advOf = advOf;
+  api.isCrit = isCrit;
   api.scrub = scrub;
   api.hideFull = hideFull;
   api.lave = lave;
@@ -239,7 +270,7 @@
   /* =================== Interface joueuse (navigateur) =================== */
   var doc = root.document;
   var H = null, dbh = null, viewRef = null, vdoc = null, vloaded = false, vbusy = false, vlast = 0, vErrAt = 0;
-  var edit = null, ecoEdit = {}, rolls = [], note = '', noteT = 0, hpT = 0, lastHtml = '', lastNat = {}, scrubbed = false;
+  var edit = null, ecoEdit = {}, rolls = [], note = '', noteT = 0, hpT = 0, lastHtml = '', lastNat = {}, scrubbed = false, advSel = 'n';
   var mine = makeLimiter(5, 10000);
   /* onglets (combat-onglets.js) : onglet courant (mémoire locale), niveau d'emplacement choisi par sort, dégâts du dernier sort à attaque, attaques faites ce tour */
   var TB = root.tylTabs, TAB_LS = 'tylchronicle-cs-tab', curTab = '', slotSel = {}, pend = null, atkMem = { key: '', n: 0 }, trkMark = null;
@@ -371,6 +402,16 @@
     rolls = rolls.slice(0, 5);
     return true;
   }
+  /* avantage / désavantage : états propres de la joueuse (aucune info sur un ennemi) + choix explicite ; seuil de critique du Champion */
+  function advNow(me) { return advOf(me, !!(H && H.exhOn && H.exhOn()), advSel); }
+  function critOf(me) { try { return H && H.critMin ? H.critMin(me) : 20; } catch (er) { return 20; } }
+  function advHTML(me) {
+    var A = advNow(me), lab = { n: 'Normal', a: 'Avantage', d: 'Désavantage' };
+    var txt = A.mode === 'a' ? 'Avantage : ' + A.a.join(', ') : A.mode === 'd' ? 'Désavantage : ' + A.d.join(', ') : (A.a.length && A.d.length ? 'Avantage et désavantage s\'annulent : un seul d20.' : 'Un seul d20.');
+    return '<div class="cs-adv" role="group" aria-label="Jet d\'attaque : normal, avantage ou désavantage"><span class="cs-pj-lbl">Prochain jet d\'attaque</span>' +
+      ['n', 'a', 'd'].map(function (k) { return '<button type="button" class="btn cs-pj-b cs-adv-b' + (advSel === k ? ' on' : '') + '" data-cs-adv="' + k + '" aria-pressed="' + (advSel === k) + '">' + lab[k] + '</button>'; }).join('') +
+      '<p class="muted cs-note cs-adv-t" role="status">' + esc(txt) + '</p></div>';
+  }
   function doRoll(me, view, i, kind) {
     var w = (H.weapons(me) || [])[i];
     if (!w) return;
@@ -379,10 +420,12 @@
     if (!budget(1)) return;
     var title, r, nat = 0;
     if (kind === 'atk') {
-      r = attackRoll(w.b);
-      nat = r.nat; lastNat[i] = nat; title = clean1(w.n, 44) + ' (toucher)';
+      var am = advNow(me).mode;
+      r = attackRoll(w.b, null, am);
+      nat = r.nat; lastNat[i] = nat; title = clean1(w.n, 44) + ' (toucher)' + (am === 'a' ? ' · avantage' : am === 'd' ? ' · désavantage' : '');
+      advSel = 'n';   /* le choix explicite ne vaut que pour un jet : pas d'avantage oublié au jet suivant */
     } else {
-      var crit = lastNat[i] === 20, ex = (w.parts || []).map(function (p) { return p.d; }).join('+');
+      var crit = isCrit(lastNat[i], critOf(me)), ex = (w.parts || []).map(function (p) { return p.d; }).join('+');
       r = rollDice(ex, crit);
       if (!r) { flash('Dégâts illisibles pour cette arme.'); paint(); return; }
       lastNat[i] = 0; title = clean1(w.n, 40) + (crit ? ' (dégâts critiques)' : ' (dégâts)');
@@ -429,7 +472,7 @@
     var pre = H.castCheck(row, slot);
     if (pre) { flash(pre); paint(); return; }
     var info = H.castInfo ? H.castInfo(row, slot) : null, rr = null, nat = 0, title = '';
-    if (row.at) { rr = attackRoll(info ? info.atk : 0); nat = rr.nat; title = row.n + ' (toucher)'; }
+    if (row.at) { var am2 = advNow(me).mode; rr = attackRoll(info ? info.atk : 0, null, am2); nat = rr.nat; title = row.n + ' (toucher, sort)' + (am2 === 'a' ? ' · avantage' : am2 === 'd' ? ' · désavantage' : ''); advSel = 'n'; }
     else if (partsExpr(info)) {
       rr = rollDice(partsExpr(info), false);
       if (!rr) { flash('Dégâts illisibles pour ce sort.'); paint(); return; }
@@ -513,7 +556,7 @@
   }
 
   function onClick(ev) {
-    var t = ev.target && ev.target.closest ? ev.target.closest('[data-cs-hp],[data-cs-tmp],[data-cs-eco],[data-cs-roll],[data-cs-tab],[data-cs-cast],[data-cs-sdmg],[data-cs-use],[data-cs-bt],[data-cs-dk]') : null;
+    var t = ev.target && ev.target.closest ? ev.target.closest('[data-cs-hp],[data-cs-tmp],[data-cs-eco],[data-cs-roll],[data-cs-adv],[data-cs-tab],[data-cs-cast],[data-cs-sdmg],[data-cs-use],[data-cs-bt],[data-cs-dk]') : null;
     if (!t) return;
     if (t.hasAttribute('data-cs-tab')) { selectTab(t.getAttribute('data-cs-tab'), false); return; }
     if (t.hasAttribute('data-cs-dk')) { try { root.tylDK.setFilter(t.getAttribute('data-cs-dk') === 'on'); } catch (er) { /* ignoré */ } paint(); return; }
@@ -525,6 +568,7 @@
     if (t.hasAttribute('data-cs-hp')) bumpHp(me, parseInt(t.getAttribute('data-cs-hp'), 10) || 0, 0);
     else if (t.hasAttribute('data-cs-tmp')) bumpHp(me, 0, parseInt(t.getAttribute('data-cs-tmp'), 10) || 0);
     else if (t.hasAttribute('data-cs-eco')) toggleEco(me, view, t.getAttribute('data-cs-eco'));
+    else if (t.hasAttribute('data-cs-adv')) { var ak = t.getAttribute('data-cs-adv'); advSel = ak === 'a' || ak === 'd' ? (advSel === ak ? 'n' : ak) : 'n'; paint(); }
     else if (t.hasAttribute('data-cs-cast')) castSpell(me, view, t.getAttribute('data-cs-cast'));
     else if (t.hasAttribute('data-cs-sdmg')) spellDmg(me, view, t.getAttribute('data-cs-sdmg'));
     else if (t.hasAttribute('data-cs-use')) useItem(me, view, t.getAttribute('data-cs-use'));
@@ -557,6 +601,8 @@
       else h += '<p class="muted">Pas de combat pour toi pour l\'instant. Cette page se met à jour toute seule.</p>';
       return h + orderHTML(view, null);
     }
+    /* rappels de concentration (DD) : seulement les siens ; la vue ne contient jamais ceux d'un ennemi */
+    if (me.cr && me.cr.length) h += me.cr.map(function (dd) { return '<div class="cs-pj-conc" role="alert">⚠ Concentration : <b>Jet de Constitution DD ' + esc(dd | 0) + '</b></div>'; }).join('');
     var ed = edit && now() - edit.at < 9000 ? edit : null;
     /* envoi confirmé, ou PV changés par le MJ depuis l'envoi : on affiche les PV reçus */
     if (ed && ed.sent && ((ed.hp === me.hp && ed.temp === me.temp) || me.hp !== ed.base || me.temp !== ed.bt)) { edit = null; ed = null; }
@@ -576,7 +622,7 @@
         body += '<ul class="cs-pj-conds" aria-label="Mes états">' + me.conds.map(function (x) { var d = H.cdesc(x); return '<li><b>' + esc(x) + '</b>' + (d ? ' : ' + esc(d) : '') + '</li>'; }).join('') + '</ul>';
       }
       if (me.hp <= 0) {
-        body += '<div class="cs-pj-ds"><b>Jets contre la mort</b> : ' + esc((me.ds || {}).s | 0) + ' réussite(s), ' + esc((me.ds || {}).f | 0) + ' échec(s) <button type="button" class="btn primary cs-pj-b" data-pa="death">Jet contre la mort</button></div>';
+        body += '<div class="cs-pj-ds"><b>Jets contre la mort</b> : ' + esc((me.ds || {}).s | 0) + ' réussite(s), ' + esc((me.ds || {}).f | 0) + ' échec(s) ' + (((me.ds || {}).f | 0) >= 3 ? '· <b>mort</b> : plus de jet.' : ((me.ds || {}).s | 0) >= 3 ? '· <b>stabilisé</b> : plus de jet tant que tu ne retombes pas à 0 PV.' : '<button type="button" class="btn primary cs-pj-b" data-pa="death">Jet contre la mort</button>') + '</div>';
       }
       body += '<div class="cs-trk" data-cs-trk></div>' + end;
       if (rolls.length) {
@@ -586,18 +632,18 @@
       body += orderHTML(view, me);
     } else if (tab === 'armes') {
       var ws = H.weapons(me) || [], cx0 = cxOf(view, me), nMax = cx0.st().atkMax;
-      body += '<h3>Mes armes</h3>' + (nMax > 1 ? '<p class="muted cs-note">Attaque supplémentaire : ' + esc(Math.min(cx0.st().atkN, nMax)) + ' / ' + esc(nMax) + ' attaques ce tour.</p>' : '');
+      body += '<h3>Mes armes</h3>' + advHTML(me) + (nMax > 1 ? '<p class="muted cs-note">Attaque supplémentaire : ' + esc(Math.min(cx0.st().atkN, nMax)) + ' / ' + esc(nMax) + ' attaques ce tour.</p>' : '');
       if (!ws.length) body += '<p class="muted">Aucune arme sur ta fiche.</p>';
       else body += '<ul class="cs-pj-weap">' + ws.map(function (w, j) {
         var dm = (w.parts || []).map(function (z) { return z.d + (z.t ? ' ' + z.t : ''); }).join(' + ');
         var a = TB.actBtn(cx0, { attrs: 'data-cs-roll="atk"', ty: 'a', label: 'Lancer', aria: 'Lancer l\'attaque : ' + w.n, primary: true, extra: { weapon: true } });
-        var d = (w.parts || []).length ? TB.actBtn(cx0, { attrs: 'data-cs-roll="dmg"', ty: 'g', label: lastNat[j] === 20 ? 'Dégâts critiques' : 'Dégâts', aria: 'Lancer les dégâts : ' + w.n }).html : '<button type="button" class="btn cs-pj-b" data-cs-ty="g" disabled aria-disabled="true" aria-label="Pas de dégâts pour ' + esc(w.n) + '">Dégâts</button>';
+        var d = (w.parts || []).length ? TB.actBtn(cx0, { attrs: 'data-cs-roll="dmg"', ty: 'g', label: isCrit(lastNat[j], critOf(me)) ? 'Dégâts critiques' : 'Dégâts', aria: 'Lancer les dégâts : ' + w.n }).html : '<button type="button" class="btn cs-pj-b" data-cs-ty="g" disabled aria-disabled="true" aria-label="Pas de dégâts pour ' + esc(w.n) + '">Dégâts</button>';
         return '<li data-cs-w="' + j + '"><div class="cs-pj-wn"><b>' + esc(w.n) + '</b> <span class="cs-ty cs-ty-a" data-ty="a">Action</span><span>' + (w.b >= 0 ? '+' : '−') + Math.abs(w.b | 0) + (dm ? ' · ' + esc(dm) : '') + '</span></div>' +
           '<div class="cs-pj-wb">' + a.html + d + '</div></li>';
       }).join('') + '</ul>';
       body += end;
     } else if (tab === 'sorts') {
-      body += dkBtn() + TB.spellsHTML(cxOf(view, me)) + end;
+      body += advHTML(me) + dkBtn() + TB.spellsHTML(cxOf(view, me)) + end;
     } else {
       body += '<h3>Mon sac</h3>' + TB.bagHTML(cxOf(view, me)) + end;
     }
@@ -644,7 +690,7 @@
 
   function focusKey(el) {
     if (!el || !el.getAttribute) return '';
-    var k = ['data-cs-hp', 'data-cs-tmp', 'data-cs-eco', 'data-pa', 'data-cs-tab', 'data-cs-cast', 'data-cs-sdmg', 'data-cs-use', 'data-cs-bt', 'data-cs-slot', 'data-cs-dk'].filter(function (a) { return el.hasAttribute(a); })[0];
+    var k = ['data-cs-hp', 'data-cs-tmp', 'data-cs-eco', 'data-cs-adv', 'data-pa', 'data-cs-tab', 'data-cs-cast', 'data-cs-sdmg', 'data-cs-use', 'data-cs-bt', 'data-cs-slot', 'data-cs-dk'].filter(function (a) { return el.hasAttribute(a); })[0];
     if (k) return k + '=' + el.getAttribute(k);
     if (el.hasAttribute('data-cs-roll')) { var r = el.closest('[data-cs-w]'); return 'roll=' + el.getAttribute('data-cs-roll') + '@' + (r ? r.getAttribute('data-cs-w') : ''); }
     return '';

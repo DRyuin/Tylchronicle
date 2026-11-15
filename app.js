@@ -326,6 +326,9 @@ ds: { s: int(c.ds && c.ds.s, 0), f: int(c.ds && c.ds.f, 0) },
 pa: cleanPA(c.pa), lr: cleanLR(c.lr), sh: Math.max(0, Math.min(5, int(c.sh, 0))),
 eco: { g: Math.max(0, Math.min(3, int(c.eco && c.eco.g, 0))), a: int(c.eco && c.eco.a, 0) ? 1 : 0, n: Math.max(0, int(c.eco && c.eco.n, 0)), b: int(c.eco && c.eco.b, 0) ? 1 : 0, r: int(c.eco && c.eco.r, 0) ? 1 : 0, bs: Math.min(2, Math.max(0, int(c.eco && c.eco.bs, 0))) }
 });
+var lc = out.combatants[out.combatants.length - 1];
+if (c.ko) lc.ko = c.ko === 2 ? 2 : 1;   /* « Inconscient » posé par l'appli à 0 PV (retiré au soin) */
+if (Array.isArray(c.cr) && c.cr.length) lc.cr = c.cr.map(function (x) { return Math.max(1, Math.min(999, int(x, 10))); }).slice(-6);   /* rappels de concentration en attente (DD) */
 if (c.hid) out.combatants[out.combatants.length - 1].hid = 1;
 });
 var nF = out.map && out.map.fl ? 1 + out.map.fl.length : 1;
@@ -610,6 +613,7 @@ mutSeq++; redoStack = [];
 undoStack.push(JSON.stringify(S));
 if (undoStack.length > 30) undoStack.shift();
 fn();
+koSync();
 var text = typeof msg === 'function' ? msg() : msg;
 if (text) S.log.unshift('Round ' + S.round + ' · ' + text);
 S.log = S.log.slice(0, 40);
@@ -617,6 +621,24 @@ S.example = false;
 mapPlaceNew(); checkVictory();
 render();
 save();
+}
+/* PJ (ou créature avec jets contre la mort) à 0 PV = « Inconscient » automatique, retiré au soin ; au-dessus de 0 PV, les jets contre la mort repartent de zéro.
+   c.ko = 1 : l'état a été posé par l'appli (retiré au soin) ; c.ko = 2 : déjà posé à la main, ou retiré à la main à 0 PV (on n'y touche plus).
+   Un Inconscient posé à la main reste donc après un soin. Les monstres sans jets contre la mort sont « hors combat » : rien. */
+function koSync() {
+var list = (S && S.combatants) || [];
+for (var i = 0; i < list.length; i++) {
+var c = list[i];
+if (!c || !c.conds || !(c.kind === 'pj' || c.dsv)) continue;
+if (c.hp <= 0) {
+if (c.ko === 1 && c.conds.indexOf('Inconscient') < 0) c.ko = 2;
+else if (!c.ko) { if (c.conds.indexOf('Inconscient') < 0) { c.conds.push('Inconscient'); c.ko = 1; } else c.ko = 2; }
+} else {
+if (c.ko === 1) c.conds = c.conds.filter(function (x) { return x !== 'Inconscient'; });
+if (c.ko) delete c.ko;
+if (c.ds && (c.ds.s || c.ds.f)) c.ds = { s: 0, f: 0 };
+}
+}
 }
 function undo() {
 if (!undoStack.length) return;
@@ -762,7 +784,7 @@ var f = null;
 for (var j = 0; j < list.length; j++) if (ok(list[j])) { if (surp(list[j])) continue; f = list[j]; break; }
 if (!wasGap && (!S.round || S.round <= 1)) rcClearAll();
 S.gap = 0; S.gapN = '';
-S.activeId = (f || list[0]).id; ecoReset(f || list[0]); S.won = null;
+S.activeId = (f || list[0]).id; ecoReset(f || list[0]); S.won = null; crClear();
 if (!S.round || S.round < 1) S.round = 1;
 return;
 }
@@ -773,7 +795,7 @@ if (i >= list.length) { i = 0; wrapped++; }
 if (i < 0) { i = list.length - 1; wrapped--; }
 if (ok(list[i])) { if (surp(list[i])) continue; break; }
 }
-S.activeId = list[i].id; ecoReset(list[i]); S.oa = [];
+S.activeId = list[i].id; ecoReset(list[i]); S.oa = []; crClear();
 fxCap = ''; setFx('turn', list[i].id, '', 0, '');
 S.round = Math.max(1, S.round + wrapped);
 if (list[i].lg) list[i].lg.used = 0;
@@ -789,6 +811,7 @@ return m0;
 });
 rcRemind();
 }
+function crClear() { S.combatants.forEach(function (x) { if (x.cr) delete x.cr; }); }
 function gapMark(gone) {
 var list = sorted(), idx = -1, k;
 for (k = 0; k < list.length; k++) if (list[k].id === S.activeId) idx = k;
@@ -809,7 +832,7 @@ return true;
 function takeDmg(c, n, crit) {
 var hp0 = c.hp, r = takeDmg0(c, n, crit);
 try { snOnDmg(c, hp0); } catch (e) { /* ignoré */ }
-return r;
+return r + concHit(c, n);
 }
 function takeDmg0(c, n, crit) {
 var rest = n, was0 = c.hp <= 0, hp0 = c.hp;
@@ -818,6 +841,10 @@ c.hp = Math.max(0, c.hp - rest);
 if (rlOn('insta') && rest > 0 && (c.kind === 'pj' || c.dsv) && c.ds) {
 var over = was0 ? rest : rest - hp0;
 if (over >= c.max) { c.ds.f = 3; c.ds.s = 0; return ' · mort instantanée (' + over + ' dégâts au-delà de 0, PV max ' + c.max + ')'; }
+}
+if (was0 && rest > 0 && c.kind === 'pj' && c.ds && c.ds.s >= 3 && c.ds.f < 3) {
+c.ds = { s: 0, f: Math.min(3, crit ? 2 : 1) };
+return ' · n\u2019est plus stabilisé : échec au jet contre la mort (' + c.ds.f + '/3)';
 }
 if (was0 && rest > 0 && c.kind === 'pj' && c.ds && c.ds.s < 3 && c.ds.f < 3) {
 c.ds.f = Math.min(3, c.ds.f + (crit ? 2 : 1));
@@ -843,7 +870,7 @@ if (wasDown && c.hp > 0) c.ds = { s: 0, f: 0 };
 c.temp = Math.max(c.temp, n);
 }
 }, function () {
-if (kind === 'dmg') return c.name + ' −' + n + ' PV (' + c.hp + '/' + c.max + ')' + (c.hp <= 0 ? ', tombe à 0' : '') + concNote(c, n) + dsn;
+if (kind === 'dmg') return c.name + ' −' + n + ' PV (' + c.hp + '/' + c.max + ')' + (c.hp <= 0 ? ', tombe à 0' : '') + dsn;
 if (kind === 'heal') return c.name + ' +' + n + ' PV (' + c.hp + '/' + c.max + ')';
 return c.name + ' : ' + c.temp + ' PV temporaires';
 });
@@ -917,6 +944,8 @@ notes: $('lnotes').value.trim(), img: formImg
 };
 }
 
+/* '' si un jet contre la mort est possible ; 'mort' (3 échecs) ou 'stabilisé' (3 réussites) sinon */
+function dsOff(c) { var d = c && c.ds; return d && d.f >= 3 ? 'mort' : d && d.s >= 3 ? 'stabilisé' : ''; }
 function deathHTML(c) {
 function dots(t, count) {
 var h = '';
@@ -970,7 +999,7 @@ return '<li class="card' + (isAct ? ' active' : '') + (out ? ' dead' : '') + '" 
 '<div class="hptxt"><b>' + c.hp + '</b> / ' + c.max + (c.temp > 0 ? ' <span class="temp">+' + c.temp + ' temp.</span>' : '') + '</div></div>' +
 '<div class="dmg"><input class="amt" type="number" inputmode="numeric" min="1" placeholder="Montant" value="' + esc(amounts[c.id] || '') + '" data-key="amt:' + c.id + '" aria-label="Montant pour ' + esc(c.name) + '">' +
 '<button type="button" class="btn sm danger" data-act="dmg">Dégâts</button><button type="button" class="btn sm heal" data-act="heal">Soin</button><button type="button" class="btn sm" data-act="temp">PV temp.</button></div>' +
-(downPJ ? deathHTML(c) : '') +
+(downPJ ? deathHTML(c) : '') + crHTML(c) +
 ecoChips(c) +
 (chips ? '<div class="chips">' + chips + '</div>' : '') +
 (cardTags(c, e) ? '<div class="tgs">' + cardTags(c, e) + '</div>' : '') +
@@ -1603,6 +1632,11 @@ mutate(function () {
 var i = c.conds.indexOf(name);
 if (i >= 0) c.conds.splice(i, 1); else c.conds.push(name);
 }, function () { return c.name + (c.conds.indexOf(name) >= 0 ? ' : ' + name : ' n\'est plus ' + name.toLowerCase()); });
+return;
+}
+if (act === 'crok') {
+var ci = int(b.dataset.i, 0);
+mutate(function () { if (c.cr) { c.cr.splice(ci, 1); if (!c.cr.length) delete c.cr; } }, null);
 return;
 }
 if (act === 'ds') {
@@ -5308,7 +5342,7 @@ return h + '<p style="margin:0">Ce n\'est pas ton tour. Tu peux toujours utilise
 return '<button type="button" class="sc-row-btn" data-sc="sp:' + r.ix + '"' + (canR && !spAccess(myEntry(), r) ? '' : ' disabled') + '><b>' + esc(r.n) + '</b><span class="t">' + esc(scSpellLine(r)) + '</span><span class="d">' + esc(String(r.x || '').slice(0, 170)) + (String(r.x || '').length > 170 ? '…' : '') + '</span></button>';
 }).join('') + '</div>' : '') + (myEntry() && capList(myEntry()).some(function (q) { return q.eco === 'r' || q.k === 'inflex'; }) ? '<span class="sc-lbl">Capacités :</span><div class="sc-list">' + capBtns(myEntry(), me, false, 'sc', function (q) { return q.eco === 'r' || q.k === 'inflex'; }) + '</div>' : '') + '<div class="sc-grid"><button type="button" class="sc-btn act" data-pa="eco" data-k="r"' + (canR ? '' : ' disabled') + '>⚡ Utiliser ma réaction</button></div></div>';
 }
-if (me.hp <= 0 && !kid) return h + '<div class="sc-grid"><button type="button" class="sc-btn atk" data-pa="death">💀 Jet contre la mort</button></div></div>';
+if (me.hp <= 0 && !kid) return h + (dsOff(me) ? '<p style="margin:0">Tu es ' + (dsOff(me) === 'mort' ? 'mort' : 'stabilisé : pas de jet contre la mort') + '.</p></div>' : '<div class="sc-grid"><button type="button" class="sc-btn atk" data-pa="death">💀 Jet contre la mort</button></div></div>');
 if (kid && kid.hp <= 0) return h + '<p style="margin:0">' + esc(kid.name) + ' est à terre.</p><div class="sc-grid"><button type="button" class="sc-btn end" data-pa="end">Terminer son tour</button></div></div>';
 if (pv.ar) return h + arHTML(true) + '</div>';
 if (sc.m === 'atk') {
@@ -7752,8 +7786,8 @@ if (myTurn && ec.a && ec.b) a += '<div class="msg">Action et action bonus utilis
 var ecoForm = combat && myTurn ? '<div class="rowf ecoform"><input type="text" id="pvEcoTxt" data-pecot value="' + esc(pv.ecoTxt || '') + '" placeholder="Ce que tu fais (facultatif)" aria-label="Description"><button type="button" class="btn sm" data-pa="eco" data-k="b"' + (canB ? '' : ' disabled') + '>Utiliser mon action bonus</button><button type="button" class="btn sm" data-pa="xact"' + (ec.a && ec.g < 2 ? '' : ' disabled') + ' title="Fougue d\'action, Hâte… : une nouvelle action complète ce tour">➕ Action supplémentaire</button></div>' : '';
 var reactForm = combat ? '<div class="rowf ecoform"><button type="button" class="btn sm" data-pa="eco" data-k="r"' + (canR ? '' : ' disabled') + '>Utiliser ma réaction</button><span class="sm muted">1 par round, elle revient au début de ton tour.</span></div>' : '';
 if (!myTurn) a += '<p class="muted">' + (act ? 'Attends ton tour pour agir.' : 'Le combat n\'a pas encore commencé : tu pourras agir quand le MJ lancera le premier tour.') + '</p>' + reactForm;
-else if (kid && kid.hp <= 0) a += kid.dsv ? '<div class="abtns"><button type="button" class="btn primary" data-pa="death" data-k="1">Jet contre la mort de ' + esc(kid.name) + '</button></div>' : '<p class="muted">' + esc(kid.name) + ' est à terre.</p>';
-else if (c.hp <= 0 && !kid) a += '<div class="abtns"><button type="button" class="btn primary" data-pa="death">Jet de sauvegarde contre la mort</button></div>';
+else if (kid && kid.hp <= 0) a += kid.dsv && !dsOff(kid) ? '<div class="abtns"><button type="button" class="btn primary" data-pa="death" data-k="1">Jet contre la mort de ' + esc(kid.name) + '</button></div>' : '<p class="muted">' + esc(kid.name) + ' est à terre' + (dsOff(kid) ? ' (' + dsOff(kid) + ')' : '') + '.</p>';
+else if (c.hp <= 0 && !kid) a += dsOff(c) ? '<p class="muted">Tu es ' + (dsOff(c) === 'mort' ? 'mort' : 'stabilisé : pas de jet contre la mort') + '.</p>' : '<div class="abtns"><button type="button" class="btn primary" data-pa="death">Jet de sauvegarde contre la mort</button></div>';
 else {
 if (me.pa) { a += padHTML(false); }
 else if (pv.ar) { a += arHTML(false); }
@@ -8264,13 +8298,8 @@ function smallRace(who) { var p = pcInfo(who); return !!(p && /halfelin|gnome/i.
 var ADV_T = ['Aveuglé', 'Entravé', 'Étourdi', 'Paralysé', 'Inconscient', 'Pétrifié'];
 function arAuto(who, t, m) {
 var A = [], D = [], pos = mapOn() && who.p && t && t.p, dist = pos ? cheb2(who, t) : 0, near = pos ? dist <= 1 : !!m.mel;
-if (condHas(who, 'Aveuglé')) D.push('tu es aveuglé');
-if (condHas(who, 'Empoisonné')) D.push('tu es empoisonné');
-if (condHas(who, 'À terre') && who.hp > 0) D.push('tu es à terre');
-if (condHas(who, 'Entravé')) D.push('tu es entravé');
-if (condHas(who, 'Effrayé')) D.push('tu es effrayé (si ce qui te fait peur est en vue)');
-if (rlOn('exh') && condHas(who, 'Épuisement') && int(who.ex, 0) >= 3) D.push('tu es épuisé (niveau ' + who.ex + ')');
-if (condHas(who, 'Invisible')) A.push('tu es invisible');
+var own = window.tylPJ && window.tylPJ.advSelf ? window.tylPJ.advSelf(who, rlOn('exh')) : { a: [], d: [] };   /* états propres : même fonction que la page Simplifié (combat-joueuse.js) */
+A = own.a; D = own.d;
 if (t) {
 var ct = ADV_T.filter(function (x) { return condHas(t, x); });
 if (ct.length) A.push(t.name + ' est ' + ct.join(' / ').toLowerCase());
@@ -9170,7 +9199,7 @@ mutate(function () {
 if (heal) { var was = t.hp <= 0; t.hp = Math.min(t.max, t.hp + n); if (was && t.hp > 0) t.ds = { s: 0, f: 0 }; }
 else dsn = takeDmg(t, n, !!fxCtx.crit);
 setFx(heal ? 'heal' : t.hp <= 0 ? 'ko' : fxCtx.crit ? 'crit' : 'hit', fxCtx.src, t.id, n, fxCtx.fin);
-}, function () { return text + ' → ' + t.name + (heal ? ' +' : ' −') + n + ' PV (' + t.hp + '/' + t.max + ')' + (t.hp <= 0 && !heal ? ', tombe à 0' : '') + (heal ? '' : concNote(t, n) + dsn); });
+}, function () { return text + ' → ' + t.name + (heal ? ' +' : ' −') + n + ' PV (' + t.hp + '/' + t.max + ')' + (t.hp <= 0 && !heal ? ', tombe à 0' : '') + (heal ? '' : dsn); });
 }
 function procAction(a) {
 var c0 = byId(a.actor);
@@ -9205,7 +9234,7 @@ function csPjAct(a, c) {
 var P = window.tylPJ, why = P ? P.check(a, c, S) : 'module absent';
 if (why) { logLine('Action refusée (' + a.t + ' : ' + why + ')'); return; }
 if (a.t === 'roll' && !P.take(a.from)) { logLine('Jet ignoré : trop de jets de la même joueuse (5 par 10 s)'); return; }
-var why2 = P.apply(a, c, { mutate: mutate, logLine: logLine, ecoOf: ecoOf, quiet: csQuiet });
+var why2 = P.apply(a, c, { mutate: mutate, logLine: logLine, ecoOf: ecoOf, quiet: csQuiet, conc: concHit, critMin: critMin });
 if (why2) logLine('Action refusée (' + a.t + ' : ' + why2 + ')');
 }
 function procAction0(a) {
@@ -9333,10 +9362,12 @@ return;
 if (a.t === 'end') { if (S.activeId === c.id) stepGate(1); return; }
 if (a.t === 'death') {
 if (c.hp > 0) return;
+if (c.ds.f >= 3) { logLine(c.name + ' est mort : pas de jet contre la mort'); return; }
+if (c.ds.s >= 3) { logLine(c.name + ' est stabilisé : pas de jet contre la mort'); return; }
 var n = int(a.nat, 10), msg;
 mutate(function () {
 if (n === 20) { c.hp = 1; c.ds = { s: 0, f: 0 }; msg = 'réussite critique, revient à 1 PV'; }
-else if (n >= 10) { c.ds.s++; msg = 'réussit (' + c.ds.s + '/3)'; if (c.ds.s >= 3) { c.ds = { s: 0, f: 0 }; msg += ' : stabilisé'; } }
+else if (n >= 10) { c.ds.s++; msg = 'réussit (' + c.ds.s + '/3)'; if (c.ds.s >= 3) msg += ' : stabilisé'; }
 else { c.ds.f += n === 1 ? 2 : 1; msg = (n === 1 ? 'échec critique' : 'échoue') + ' (' + c.ds.f + '/3 échecs)' + (c.ds.f >= 3 ? ' : meurt' : ''); }
 }, function () { return c.name + ', jet contre la mort ' + n + ' : ' + msg; });
 return;
@@ -13013,13 +13044,20 @@ if (!u.hd[k]) delete u.hd[k];
 });
 }
 function concOf(c) {
-var e = c && c.kind === 'pj' ? libFor(c) : (c ? libFor(c) : null);
-return e && e.x && e.x.use && e.x.use.conc ? String(e.x.use.conc) : '';
+var e = c ? libFor(c) : null, s = e && e.x && e.x.use && e.x.use.conc ? String(e.x.use.conc) : '';
+return s || (c && condHas(c, 'Concentration') ? 'sort' : '');   /* la fiche, ou la puce « Concentration » (monstres, PNJ) */
 }
-function concNote(c, n) {
+/* à chaque instance de dégâts (attaque, zone, retrait à la main, action joueuse) : un rappel « Jet de Constitution DD X », X = max(10, moitié des dégâts arrondie à l'inférieur). Appelé dans mutate(). */
+function concHit(c, n) {
 var s = concOf(c);
-if (!s || n < 1) return '';
-return c.hp <= 0 ? ' · concentration sur ' + s + ' brisée' : ' · ⚠ concentration (' + s + ') : jet de Con DD ' + Math.max(10, Math.floor(n / 2));
+if (!s || !(n >= 1)) return '';
+if (c.hp <= 0) { delete c.cr; return ' · concentration sur ' + s + ' brisée'; }
+var dd = Math.max(10, Math.floor(n / 2));
+c.cr = (c.cr || []).concat([dd]).slice(-6);
+return ' · ⚠ concentration (' + s + ') : jet de Con DD ' + dd;
+}
+function crHTML(c) {
+return (c.cr || []).map(function (dd, i) { return '<div class="conc-rem" role="alert"><span>⚠ Concentration : <b>Jet de Constitution DD ' + int(dd, 10) + '</b></span><button type="button" class="btn sm" data-act="crok" data-i="' + i + '" aria-label="Écarter le rappel de concentration DD ' + int(dd, 10) + '">Fait</button></div>'; }).join('');
 }
 function tkCast(e, r, slot, dry) {
 var res = { err: '', replaced: '' };
@@ -13586,7 +13624,9 @@ castInfo: function (r, slot) { var e = myEntry(); if (!e) return null; var cf = 
 slotInfo: function () { var e = myEntry(); if (!e || !tkOK(e)) return null; var s = tkSlots(e), u = tkUse(e); return { n: s.slots.length, pact: s.pact ? s.pact.lvl : 0, max: s.slots.slice(), left: s.slots.map(function (mx, i) { return Math.max(0, mx - int(u.sl[i + 1], 0)); }) }; },
 bag: function () { var e = myEntry(), x = e && e.x; return { text: String((x && x.equip) || ''), over: x && x.bagt && typeof x.bagt === 'object' && !Array.isArray(x.bagt) ? x.bagt : {} }; },
 bagSet: function (text, over) { var e = myEntry(); if (!e) return false; e.x = e.x || {}; if (text != null) e.x.equip = String(text).slice(0, 4000); if (over) e.x.bagt = over; libSave(e); if (libCol) render(); return true; },
-extra: function () { var c = myC(); return c ? extraAtk(c) : 1; }
+extra: function () { var c = myC(); return c ? extraAtk(c) : 1; },
+exhOn: function () { return rlOn('exh'); },
+critMin: function (vc) { var c = myC() || (vc ? normalize({ combatants: [vc] }).combatants[0] : null); return c ? critMin(c) : 20; }
 });
 } catch (e) { /* ignoré */ }
 try {
