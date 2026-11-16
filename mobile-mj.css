@@ -1,0 +1,50 @@
+/* mobile-mj.css : lot 5 « praticité mobile » (vue MJ, téléphone). Chargé en dernier.
+   TOUT est borné à @media (max-width: 700px) : le bureau et la tablette ne changent pas d'un pixel.
+   1. en-tête compact (titre et état sur une ligne, outils et vue joueuse sur UNE rangée) ;
+   2. onglets : 44 px, texte jamais coupé, défilement horizontal interne seulement ;
+   3. barre de combat en BAS (au pouce) en mode Complet : « Tour suivant › » sur une ligne, toujours visible
+      (le mode Simplifié a déjà sa barre #csNextBar en bas). */
+@media (max-width: 700px) {
+/* ---- 1. en-tête compact ---- */
+.mjbar > .brand { padding: calc(6px + env(safe-area-inset-top, 0px)) 12px 0; }
+.mjbar > .brand .mark { width: 28px; height: 28px; }
+.mjbar > .brand > div { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; min-width: 0; }
+.mjbar > .brand h1 { font-size: 1.05rem; line-height: 1.2; }
+.mjbar > .brand .sub { font-size: 0; line-height: 1.2; }   /* « Table de combat · » masqué (reste lu par les lecteurs d'écran), l'état de synchro reste */
+.mjbar > .brand #sync { font-size: .875rem; }
+.mjbar > .tabs { padding-left: 12px; }
+/* outils et vues : une seule rangée de touches de 44 px (les deux groupes se placent côte à côte) */
+.mjbar > .bz { display: inline-flex; flex-wrap: nowrap; vertical-align: top; gap: 4px; margin: 4px 0 0 12px; }
+.mjbar > .bz + .bz { margin-left: 4px; }
+.mjbar > .bz .btn { padding: 0 6px; font-size: .875rem; white-space: nowrap; }
+/* sous 420 px : l'icône (premier caractère du bouton) est masquée par ::first-letter ; si un navigateur ne le fait pas, la rangée passe simplement sur 2 lignes */
+.mjbar > .bz .btn::first-letter { font-size: 0; }
+.mjbar > .bz .btn { padding-left: 2px; }   /* compense l'espace qui suivait l'icône */
+/* ---- 3. barre de combat au pouce (Complet) ---- */
+body:not(.cs-simple) .mjbar > .turnctl { position: fixed; top: auto; left: 0; right: 0; bottom: 0; margin: 0; z-index: 45; gap: 4px;   /* z 45 : le menu « Plus » passe devant le mini-lecteur (40) */
+  padding: 6px max(10px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px));
+  box-shadow: 0 -1px 0 var(--line), 0 -6px 14px rgba(0, 0, 0, .08); }
+body:not(.cs-simple) .mjbar > .turnctl::after { top: 0; bottom: auto; }
+body:not(.cs-simple) .mjbar .turnctl #prev { min-width: 44px; padding: 0; }
+body:not(.cs-simple) .mjbar .turnctl .btn { padding: 0 8px; }
+body:not(.cs-simple) .mjbar .turnctl #next { flex: 1 1 auto; min-width: 0; max-width: none; padding: 0 6px; white-space: nowrap; font-size: 1rem; line-height: 1.1; }
+body:not(.cs-simple) .mjbar .turnctl:has(#stop[hidden]) #next { white-space: normal; font-size: .9rem; }   /* avant le début : « Démarrer le combat » peut passer sur 2 lignes */
+body:not(.cs-simple) .mjbar .roundbox { min-width: 40px; }
+body:not(.cs-simple) .mjbar .bmore > summary { min-width: 44px; padding: 0 6px; justify-content: center; }
+/* « Plus ▾ » devient « ⋯ » (44 px) pour laisser la place à « Tour suivant › » */
+body:not(.cs-simple) .mjbar .bmore > summary { font-size: 0; }
+body:not(.cs-simple) .mjbar .bmore > summary::before { content: "\22EF"; font-size: 1.5rem; line-height: 1; color: var(--ink); }
+body:not(.cs-simple) .mjbar .bmenu { top: auto; bottom: calc(100% + 8px); }   /* le menu « Plus » s'ouvre vers le haut */
+body:not(.cs-simple):has(header.mjbar:not([hidden]) > .turnctl:not([hidden])) #dockStack { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+body:not(.cs-simple):has(header.mjbar:not([hidden]) > .turnctl:not([hidden])) #toast { bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
+body:not(.cs-simple) #viewCombat:not([hidden]) { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+}
+/* très petits écrans (320 à 360 px) : un peu plus serré pour que « Tour suivant › » reste sur une ligne */
+@media (max-width: 360px) {
+body:not(.cs-simple) .mjbar > .turnctl { gap: 2px; padding-left: max(6px, env(safe-area-inset-left, 0px)); padding-right: max(6px, env(safe-area-inset-right, 0px)); }
+body:not(.cs-simple) .mjbar .turnctl #next { font-size: .95rem; padding: 0 4px; }
+body:not(.cs-simple) .mjbar .roundbox { min-width: 36px; }
+body:not(.cs-simple) .mjbar .roundbox .lbl { font-size: .75rem; letter-spacing: .03em; }
+}
+/* icônes des outils : seulement quand la rangée a la place (sinon texte seul) */
+@media (min-width: 420px) and (max-width: 700px) { .mjbar > .bz .btn::first-letter { font-size: inherit; } .mjbar > .bz .btn { padding-left: 6px; } }
