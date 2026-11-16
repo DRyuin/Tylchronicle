@@ -181,3 +181,6 @@ body.cs-pj-on #pvTrack .tkl button, body.cs-pj-on #pvTrack .tkrest .btn, body.cs
 #csPj .cs-adv .cs-adv-b.on { border-color: var(--pj); background: var(--surface); font-weight: 700; box-shadow: inset 0 0 0 1px var(--pj); }
 #csPj .cs-adv .cs-adv-t { flex: 1 1 100%; }
 #csPj .cs-pj-conc { margin: 6px 0; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--warn); background: var(--surface-2); font-size: 1rem; }
+
+/* Lot 4 : durées de ses propres effets (puce « 3 rounds restants ») */
+#csPj .cs-pj-conds .dur-n { margin: 0 2px; }

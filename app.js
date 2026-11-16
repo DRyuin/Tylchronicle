@@ -329,6 +329,7 @@ eco: { g: Math.max(0, Math.min(3, int(c.eco && c.eco.g, 0))), a: int(c.eco && c.
 var lc = out.combatants[out.combatants.length - 1];
 if (c.ko) lc.ko = c.ko === 2 ? 2 : 1;   /* « Inconscient » posé par l'appli à 0 PV (retiré au soin) */
 if (Array.isArray(c.cr) && c.cr.length) lc.cr = c.cr.map(function (x) { return Math.max(1, Math.min(999, int(x, 10))); }).slice(-6);   /* rappels de concentration en attente (DD) */
+if (Array.isArray(c.dur) && c.dur.length) { var dn = window.tylCS && window.tylCS.durNorm ? window.tylCS.durNorm(c.dur) : []; if (dn.length) lc.dur = dn; }   /* durées d'effets en rounds (lot 4) */
 if (c.hid) out.combatants[out.combatants.length - 1].hid = 1;
 });
 var nF = out.map && out.map.fl ? 1 + out.map.fl.length : 1;
@@ -613,7 +614,7 @@ mutSeq++; redoStack = [];
 undoStack.push(JSON.stringify(S));
 if (undoStack.length > 30) undoStack.shift();
 fn();
-koSync();
+koSync(); durSync();
 var text = typeof msg === 'function' ? msg() : msg;
 if (text) S.log.unshift('Round ' + S.round + ' · ' + text);
 S.log = S.log.slice(0, 40);
@@ -760,12 +761,13 @@ function step(dir) {
 var list = sorted();
 if (!list.length) return;
 S.combatants.filter(function (o) { return o.pa; }).forEach(autoPA);
-var round0 = S.round, skipped = [], rcBack = [];
+var round0 = S.round, skipped = [], rcBack = [], ended = [];
 var started = !!S.activeId && !!byId(S.activeId), gap0 = !!S.gap;
 mutate(function () {
 Object.keys(flows).forEach(function (fk) { var ff = flows[fk]; if (fk !== 'sp' && ff && (ff.step === 'done' || ff.step === 'miss' || fk === S.activeId)) delete flows[fk]; });
 if (S.activeId && typeof multiSt === 'object' && multiSt) delete multiSt[S.activeId];
-var prevC = byId(S.activeId); if (prevC) { var pe = ecoOf(prevC); prevC.eco = { a: 0, n: 0, b: 0, r: pe.r, bs: 0, g: 0 }; }
+var prevC = byId(S.activeId); if (prevC) { var pe = ecoOf(prevC); prevC.eco = { a: 0, n: 0, b: 0, r: pe.r, bs: 0, g: 0 }; if (dir < 0 && CSD()) CSD().durUntick(prevC, S.round); }
+function durBegin(c) { if (dir > 0 && c && CSD()) CSD().durTick(c, S.round).forEach(function (k) { ended.push(k + ' (' + c.name + ')'); }); }
 function ok(c) { return !(c.kind === 'mj' && c.hp <= 0 && !c.dsv); }
 skipped = [];
 function surp(c) { if (rlOn('surp') && condHas(c, 'Surpris')) { c.conds = c.conds.filter(function (x) { return x !== 'Surpris'; }); skipped.push(c.name); return true; } return false; }
@@ -786,6 +788,7 @@ if (!wasGap && (!S.round || S.round <= 1)) rcClearAll();
 S.gap = 0; S.gapN = '';
 S.activeId = (f || list[0]).id; ecoReset(f || list[0]); S.won = null; crClear();
 if (!S.round || S.round < 1) S.round = 1;
+durBegin(f || list[0]);
 return;
 }
 var wrapped = 0;
@@ -798,6 +801,7 @@ if (ok(list[i])) { if (surp(list[i])) continue; break; }
 S.activeId = list[i].id; ecoReset(list[i]); S.oa = []; crClear();
 fxCap = ''; setFx('turn', list[i].id, '', 0, '');
 S.round = Math.max(1, S.round + wrapped);
+durBegin(list[i]);
 if (list[i].lg) list[i].lg.used = 0;
 rcBack = [];
 var rcB4 = {}; Object.keys(list[i].pw || {}).forEach(function (k) { if (k.charAt(0) !== '@' && k.indexOf('__') !== 0 && int(list[i].pw['@' + k], 0)) rcB4[k] = 1; });
@@ -806,10 +810,87 @@ Object.keys(rcB4).forEach(function (k) { if (!int(list[i].pw && list[i].pw[k], 0
 }, function () {
 var m0 = !started && !gap0 ? 'Le combat commence' : S.round !== round0 ? 'Début du round ' + S.round : gap0 ? 'Au tour de ' + (byId(S.activeId) ? byId(S.activeId).name : '?') : null;
 if (rcBack.length) m0 = (m0 ? m0 + ' · ' : '') + rcBack.join(', ') + ' : rechargé' + (rcBack.length > 1 ? 's' : '') + ' (prêt à l\'emploi)';
+if (ended.length) m0 = (m0 ? m0 + ' · ' : '') + '⏱ effet terminé : ' + ended.join(', ');
 if (skipped.length) { var sm = skipped.join(', ') + (skipped.length > 1 ? ' sont surpris : leur tour est ignoré' : ' est surpris : son tour est ignoré'); m0 = m0 ? m0 + ' · ' + sm : sm; }
 return m0;
 });
+if (ended.length) uxToast('⏱ ' + ended.join(', ') + ' : effet terminé');
 rcRemind();
+}
+/* ---- durées d'effets en rounds (lot 4). Modèle pur et règle de décompte : combat-simple.js (tylCS.dur*). c.dur = [{ k, n, l, s }], optionnel : sans lui rien ne change. ---- */
+var durF = {};   /* champs du formulaire « Durée » par combattant (survivent au re-rendu) */
+function CSD() { return window.tylCS && window.tylCS.durTick ? window.tylCS : null; }
+function durOf(c, k) { var a = c && c.dur || []; for (var i = 0; i < a.length; i++) if (a[i].k === k) return a[i]; return null; }
+/* un état retiré (à la main, par une règle…) emporte sa durée */
+function durSync() {
+(S.combatants || []).forEach(function (c) {
+if (!c.dur) return;
+c.dur = c.dur.filter(function (e) { return COND.indexOf(e.k) < 0 || (c.conds && c.conds.indexOf(e.k) >= 0); });
+if (!c.dur.length) delete c.dur;
+});
+}
+function durNum(e) { return e.n > 0 ? ' <b class="dur-n" title="' + e.n + ' round' + (e.n > 1 ? 's' : '') + ' restant' + (e.n > 1 ? 's' : '') + '">' + e.n + '</b>' : ' <b class="dur-n z" title="Durée écoulée">0</b>'; }
+/* texte joueuse (Complet et Simplifié) : seulement les effets de ses propres personnages */
+function durPv(e) { return ' · ' + (e.n > 0 ? '<b class="dur-n">' + e.n + '</b> round' + (e.n > 1 ? 's' : '') + ' restant' + (e.n > 1 ? 's' : '') : '<b class="dur-n z">0</b> effet terminé'); }
+function durPvFree(c) { return ((c && c.dur) || []).filter(function (e) { return COND.indexOf(e.k) < 0; }).map(function (e) { return '<div><b>' + esc(e.k) + '</b>' + durPv(e) + '</div>'; }).join(''); }
+function durEndHTML(c) {
+return (c.dur || []).map(function (e) {
+if (e.n > 0) return '';
+return '<div class="conc-rem dur-end" role="alert"><span>⏱ <b>' + esc(e.k) + '</b> (' + esc(c.name) + ') : effet terminé</span><span class="dur-btns">' +
+'<button type="button" class="btn sm" data-act="durrm" data-k="' + esc(e.k) + '" aria-label="Retirer l\'effet ' + esc(e.k) + ' de ' + esc(c.name) + '">Retirer</button>' +
+'<button type="button" class="btn sm" data-act="durp" data-k="' + esc(e.k) + '" aria-label="Prolonger l\'effet ' + esc(e.k) + ' de ' + esc(c.name) + ' d\'un round">Prolonger +1</button></span></div>';
+}).join('');
+}
+function durFree(c) {
+return (c.dur || []).filter(function (e) { return COND.indexOf(e.k) < 0; }).map(function (e) {
+return '<button type="button" class="chip on dur-chip" data-act="durx" data-k="' + esc(e.k) + '" title="' + esc(e.k + ' : ' + e.n + ' round(s) (clic : retirer)') + '">' + esc(e.k) + durNum(e) + ' ×</button>';
+}).join('');
+}
+function durForm(c) {
+var f = durF[c.id] || {};
+return '<div class="durform" role="group" aria-label="Durée en rounds">' +
+'<label>Effet (état ou sort)<input type="text" list="durL-' + esc(c.id) + '" maxlength="40" autocomplete="off" data-durf="k" data-key="durk:' + esc(c.id) + '" value="' + esc(f.k || '') + '" placeholder="Aveuglé, Bénédiction…"></label>' +
+'<datalist id="durL-' + esc(c.id) + '">' + COND.filter(function (x) { return x !== 'Épuisement'; }).map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist>' +
+'<label>Durée<input type="text" maxlength="12" autocomplete="off" data-durf="v" data-key="durv:' + esc(c.id) + '" value="' + esc(f.v || '') + '" placeholder="10 rounds, 1 minute"></label>' +
+'<button type="button" class="btn sm" data-act="duradd">Durée +</button>' +
+'<p class="hint dur-hint">Le compteur baisse de 1 au début du tour de celui qui porte l\'effet. À 0, une alerte te laisse retirer ou prolonger : rien n\'est retiré tout seul.</p></div>';
+}
+function durAdd(c, li) {
+var CS = CSD();
+if (!CS) return;
+var f = durF[c.id] = durF[c.id] || { k: '', v: '' };
+var ik = li && li.querySelector('[data-durf="k"]'), iv = li && li.querySelector('[data-durf="v"]');
+if (ik) f.k = ik.value; if (iv) f.v = iv.value;
+var label = String(f.k || '').replace(/\s+/g, ' ').replace(/^ | $/g, '').slice(0, 40), n = CS.durParse(f.v), kk = '';
+COND.forEach(function (x) { if (fold(x) === fold(label)) kk = x; });
+if (kk === 'Épuisement') { uxToast('Épuisement : se règle par niveaux, pas par rounds'); return; }
+if (!label || !n) {
+var bad = li && li.querySelector(!label ? '[data-durf="k"]' : '[data-durf="v"]');
+if (bad) { bad.setAttribute('aria-invalid', 'true'); bad.focus(); }
+uxToast(!label ? 'Indique l\'effet (état ou sort)' : 'Durée illisible : écris par exemple « 10 rounds » ou « 1 minute »');
+return;
+}
+if (kk) label = kk;
+mutate(function () {
+var list = sorted(), ia = -1, ib = -1, i;
+for (i = 0; i < list.length; i++) { if (list[i].id === S.activeId) ia = i; if (list[i].id === c.id) ib = i; }
+var started = ia >= 0;
+var arr = (c.dur || []).filter(function (e) { return e.k !== label; });
+arr.push({ k: label, n: n, l: 0, s: !started || ib <= ia ? S.round : 0 });
+c.dur = CS.durNorm(arr.slice(-12));
+if (kk && c.conds.indexOf(kk) < 0) c.conds.push(kk);
+durF[c.id] = { k: '', v: '' };
+}, function () { return c.name + ' : ' + label + ' pour ' + n + ' round' + (n > 1 ? 's' : ''); });
+}
+function durAct(act, c, k) {
+var e = durOf(c, k);
+if (!e) return;
+if (act === 'durp') { mutate(function () { e.n = Math.min(999, e.n + 1); }, function () { return c.name + ' : ' + k + ' prolongé d\'un round (' + e.n + ')'; }); return; }
+mutate(function () {
+c.dur = (c.dur || []).filter(function (x) { return x.k !== k; });
+if (!c.dur.length) delete c.dur;
+if (COND.indexOf(k) >= 0 && k !== 'Épuisement') c.conds = c.conds.filter(function (x) { return x !== k; });
+}, function () { return c.name + ' : ' + k + ' retiré' + (act === 'durrm' ? ' (durée écoulée)' : ''); });
 }
 function crClear() { S.combatants.forEach(function (x) { if (x.cr) delete x.cr; }); }
 function gapMark(gone) {
@@ -964,13 +1045,13 @@ var downPJ = down && (c.kind === 'pj' || !!c.dsv);
 var pct = Math.max(0, Math.min(100, c.hp / c.max * 100));
 var lvl = pct > 50 ? '' : pct > 25 ? 'warn' : 'bad';
 var e = libFor(c);
-var chips = c.conds.map(function (x) { return '<button type="button" class="chip on" data-act="cond" data-c="' + esc(x) + '" title="' + esc(x + ' — ' + cdesc(x) + (x === 'Épuisement' ? '' : ' (clic : retirer)')) + '">' + esc(condLbl(c, x)) + (x === 'Épuisement' ? '' : ' ×') + '</button>'; }).join('');
+var chips = c.conds.map(function (x) { var de = durOf(c, x); return '<button type="button" class="chip on" data-act="cond" data-c="' + esc(x) + '" title="' + esc(x + ' — ' + cdesc(x) + (de ? ' · ' + de.n + ' round(s) restant(s)' : '') + (x === 'Épuisement' ? '' : ' (clic : retirer)')) + '">' + esc(condLbl(c, x)) + (de ? durNum(de) : '') + (x === 'Épuisement' ? '' : ' ×') + '</button>'; }).join('') + durFree(c);
 var picker = '';
 if (picking[c.id]) {
 picker = '<div class="chips" role="group" aria-label="États">' + COND.map(function (x) {
 var on = c.conds.indexOf(x) >= 0;
 return '<button type="button" class="chip' + (on ? ' on' : '') + '" data-act="cond" data-c="' + esc(x) + '" title="' + esc(x + ' — ' + cdesc(x)) + '" aria-pressed="' + on + '">' + esc(condLbl(c, x)) + '</button>';
-}).join('') + '</div>';
+}).join('') + '</div>' + durForm(c);
 }
 var edit = '';
 if (editing[c.id]) {
@@ -999,7 +1080,7 @@ return '<li class="card' + (isAct ? ' active' : '') + (out ? ' dead' : '') + '" 
 '<div class="hptxt"><b>' + c.hp + '</b> / ' + c.max + (c.temp > 0 ? ' <span class="temp">+' + c.temp + ' temp.</span>' : '') + '</div></div>' +
 '<div class="dmg"><input class="amt" type="number" inputmode="numeric" min="1" placeholder="Montant" value="' + esc(amounts[c.id] || '') + '" data-key="amt:' + c.id + '" aria-label="Montant pour ' + esc(c.name) + '">' +
 '<button type="button" class="btn sm danger" data-act="dmg">Dégâts</button><button type="button" class="btn sm heal" data-act="heal">Soin</button><button type="button" class="btn sm" data-act="temp">PV temp.</button></div>' +
-(downPJ ? deathHTML(c) : '') + crHTML(c) +
+(downPJ ? deathHTML(c) : '') + crHTML(c) + durEndHTML(c) +
 ecoChips(c) +
 (chips ? '<div class="chips">' + chips + '</div>' : '') +
 (cardTags(c, e) ? '<div class="tgs">' + cardTags(c, e) + '</div>' : '') +
@@ -1617,6 +1698,8 @@ if (S.activeId === id) { S.activeId = null; S.gap = 1; gapEnd(); }
 }, c.name + ' quitte le combat');
 return;
 }
+if (act === 'duradd') { durAdd(c, li); return; }
+if (act === 'durrm' || act === 'durp' || act === 'durx') { durAct(act, c, b.dataset.k); return; }
 if (act === 'cond') {
 var name = b.dataset.c;
 if (name === 'Épuisement') {
@@ -1648,6 +1731,7 @@ return c.name + ' : jets contre la mort, ' + c.ds.s + ' réussite(s) et ' + c.ds
 });
 listEl.addEventListener('input', function (e) {
 var el = e.target;
+if (el.dataset && el.dataset.durf) { var lid = el.closest('[data-id]'); if (lid) { var ff = durF[lid.dataset.id] = durF[lid.dataset.id] || { k: '', v: '' }; ff[el.dataset.durf] = el.value; } el.removeAttribute('aria-invalid'); return; }
 if (el.dataset && el.dataset.sum) {
 var li0 = el.closest('[data-id]'), sx = li0 && sumOf(li0.dataset.id);
 if (!sx) return;
@@ -1661,6 +1745,7 @@ if (li) amounts[li.dataset.id] = el.value;
 }
 });
 listEl.addEventListener('keydown', function (e) {
+if (e.key === 'Enter' && e.target.dataset && e.target.dataset.durf) { var lik = e.target.closest('[data-id]'), ck = lik && byId(lik.dataset.id); if (ck) durAdd(ck, lik); return; }
 if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('amt')) {
 var li = e.target.closest('[data-id]');
 if (li) { amounts[li.dataset.id] = e.target.value; hpChange(li.dataset.id, 'dmg'); }
@@ -7743,7 +7828,7 @@ var hp = c ? c.hp : e.hp, mx = c ? c.max : e.hp, pct = Math.max(0, Math.min(100,
 h += '<section class="box"><div class="mecard">' + avatar(e.img, e.name, 'pj', 'lg') + '<div style="min-width:0"><h2>' + esc(e.name) + '</h2>' +
 '<div class="hpline"><div class="hpbar ' + (pct <= 25 ? 'bad' : pct <= 50 ? 'warn' : '') + '" role="img" aria-label="PV ' + hp + ' sur ' + mx + '"><i style="width:' + pct + '%"></i></div><b>' + hp + ' / ' + mx + (c && c.temp ? ' (+' + c.temp + ')' : '') + '</b></div>' +
 '<div class="muted">CA ' + (c ? c.ac : e.ac) + ' · Init. ' + (c ? c.init : '—') + '</div></div></div>';
-if (c && c.conds.length) h += '<div class="cdesc">' + c.conds.map(function (x) { return '<div><b>' + esc(x) + '</b> : ' + esc(cdesc(x)) + '</div>'; }).join('') + '</div>';
+if (c && (c.conds.length || (c.dur && c.dur.length))) h += '<div class="cdesc">' + c.conds.map(function (x) { var de = durOf(c, x); return '<div><b>' + esc(x) + '</b> : ' + esc(cdesc(x)) + (de ? durPv(de) : '') + '</div>'; }).join('') + durPvFree(c) + '</div>';
 if (c && c.hp <= 0) h += '<div class="cdesc"><b>Jets contre la mort</b> : ' + c.ds.s + ' réussite(s), ' + c.ds.f + ' échec(s)</div>';
 if (c) pv.joining = false;
 if (!c) {
@@ -7757,7 +7842,7 @@ hj += '<section class="box pvjoin"><h2>Combat</h2>' + (cj ?
 if (c && !act) hj += '<section class="box pvwait"><h2>Tu es dans le combat</h2><p class="muted">Ton initiative est <b>' + c.init + '</b>. Le MJ n\'a pas encore lancé le premier tour : rien ne se passe tant qu\'il n\'a pas commencé, c\'est normal. Tu verras ici « Au tour de… » dès le départ, et tes boutons d\'action s\'activeront quand ce sera ton tour. En attendant, prépare tes sorts et consulte tes ressources à gauche.</p></section>';
 if (c) {
 var kids = S.combatants.filter(function (k) { return k.owner === c.id; });
-if (kids.length) h += '<div class="cdesc">' + kids.map(function (k) { return '<div><b>' + esc(k.name) + '</b> (compagnon) : ' + k.hp + ' / ' + k.max + ' PV · CA ' + k.ac + '</div>'; }).join('') + '</div>';
+if (kids.length) h += '<div class="cdesc">' + kids.map(function (k) { return '<div><b>' + esc(k.name) + '</b> (compagnon) : ' + k.hp + ' / ' + k.max + ' PV · CA ' + k.ac + (k.dur || []).map(function (e) { return ' · ' + esc(e.k) + durPv(e).replace(/^ · /, ' ') ; }).join('') + '</div>'; }).join('') + '</div>';
 }
 h += '</section>';
 if (S.combatants.length) {

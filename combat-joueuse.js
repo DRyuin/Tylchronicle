@@ -145,16 +145,28 @@
     return out;
   }
 
+  /* durées d'effets (lot 4) : jamais celles d'un ennemi (visible ou caché) ; seuls les PJ et leurs compagnons gardent « dur » */
+  function noDur(c) { var o = {}, j; for (j in c) if (has(c, j) && j !== 'dur') o[j] = c[j]; return o; }
+  function noFoeDur(st) {
+    var list = Array.isArray(st.combatants) ? st.combatants : [];
+    if (!list.some(function (c) { return isObj(c) && has(c, 'dur') && !CS.isParty(c, st); })) return st;
+    var out = {}, k;
+    for (k in st) if (has(st, k)) out[k] = st[k];
+    out.combatants = list.map(function (c) { return isObj(c) && has(c, 'dur') && !CS.isParty(c, st) ? noDur(c) : c; });
+    return out;
+  }
+
   /* ---------- Complet : on retire quand même les ennemis cachés (I5) : combattants, journal, cibles, animation ---------- */
   function hideFull(st) {
     if (!isObj(st) || !CS || CS.simple(st) || !CS.hiddenIds) return st;
     var hid = CS.hiddenIds(st), ids = Object.keys(hid), names = [], out = {}, k;
-    if (!ids.length) return st;
+    if (!ids.length) return noFoeDur(st);
     var list = Array.isArray(st.combatants) ? st.combatants : [];
     list.forEach(function (c) { if (isObj(c) && hid[c.id]) { if (c.name) names.push(String(c.name)); if (c.base && c.base !== c.name) names.push(String(c.base)); } });
     function leaks(x) { var t = String(x == null ? '' : x); return ids.some(function (i) { return t.indexOf(i) >= 0; }) || names.some(function (n) { return t.indexOf(n) >= 0; }); }
     for (k in st) if (has(st, k)) out[k] = st[k];
     out.combatants = list.filter(function (c) { return !(isObj(c) && hid[c.id]); }).map(function (c) {
+      if (isObj(c) && has(c, 'dur') && !CS.isParty(c, st)) c = noDur(c);
       if (!isObj(c) || !isObj(c.pa) || !hid[c.pa.tgt]) return c;
       var o = {}, j; for (j in c) if (has(c, j)) o[j] = c[j]; o.pa = null; return o;
     });
@@ -618,8 +630,9 @@
       body += '<div class="cs-pj-row" role="group" aria-label="Mes PV temporaires"><span class="cs-pj-lbl">PV temp. : ' + esc(temp) + '</span>' + [-1, 1, 5].map(function (n) {
         return '<button type="button" class="btn cs-pj-b" data-cs-tmp="' + n + '" aria-label="' + (n < 0 ? 'Retirer ' + (-n) : 'Ajouter ' + n) + ' PV temporaire' + (Math.abs(n) > 1 ? 's' : '') + '">' + (n < 0 ? '−' + (-n) : '+' + n) + '</button>';
       }).join('') + '</div>';
-      if (me.conds && me.conds.length) {
-        body += '<ul class="cs-pj-conds" aria-label="Mes états">' + me.conds.map(function (x) { var d = H.cdesc(x); return '<li><b>' + esc(x) + '</b>' + (d ? ' : ' + esc(d) : '') + '</li>'; }).join('') + '</ul>';
+      if ((me.conds && me.conds.length) || (me.du && me.du.length)) {
+        body += '<ul class="cs-pj-conds" aria-label="Mes états">' + (me.conds || []).map(function (x) { var d = H.cdesc(x); return '<li><b>' + esc(x) + '</b>' + (d ? ' : ' + esc(d) : '') + duTxt(me, x) + '</li>'; }).join('') +
+          (me.du || []).filter(function (e) { return (me.conds || []).indexOf(e.k) < 0; }).map(function (e) { return '<li><b>' + esc(e.k) + '</b>' + duOne(e) + '</li>'; }).join('') + '</ul>';
       }
       if (me.hp <= 0) {
         body += '<div class="cs-pj-ds"><b>Jets contre la mort</b> : ' + esc((me.ds || {}).s | 0) + ' réussite(s), ' + esc((me.ds || {}).f | 0) + ' échec(s) ' + (((me.ds || {}).f | 0) >= 3 ? '· <b>mort</b> : plus de jet.' : ((me.ds || {}).s | 0) >= 3 ? '· <b>stabilisé</b> : plus de jet tant que tu ne retombes pas à 0 PV.' : '<button type="button" class="btn primary cs-pj-b" data-pa="death">Jet contre la mort</button>') + '</div>';
@@ -628,7 +641,7 @@
       if (rolls.length) {
         body += '<h3>Mes derniers jets</h3><ol class="cs-pj-rolls">' + rolls.map(function (r) { return '<li><b>' + esc(r.title) + '</b> : ' + esc(r.total) + ' <span class="muted">(' + esc(r.detail) + ')' + (r.nat === 20 ? ' · critique !' : r.nat === 1 ? ' · échec critique' : '') + '</span></li>'; }).join('') + '</ol>';
       }
-      if (kids.length) body += '<ul class="cs-pj-kids" aria-label="Mes compagnons">' + kids.map(function (k) { return '<li><b>' + esc(k.name) + '</b> (compagnon) : ' + esc(k.hp) + ' / ' + esc(k.max) + ' PV</li>'; }).join('') + '</ul>';
+      if (kids.length) body += '<ul class="cs-pj-kids" aria-label="Mes compagnons">' + kids.map(function (k) { return '<li><b>' + esc(k.name) + '</b> (compagnon) : ' + esc(k.hp) + ' / ' + esc(k.max) + ' PV' + (k.du || []).map(function (e) { return ' · ' + esc(e.k) + duOne(e).replace(/^ · /, ' '); }).join('') + '</li>'; }).join('') + '</ul>';
       body += orderHTML(view, me);
     } else if (tab === 'armes') {
       var ws = H.weapons(me) || [], cx0 = cxOf(view, me), nMax = cx0.st().atkMax;
@@ -664,6 +677,9 @@
     if (rolls.length) s += '<span class="cs-last">Dernier jet : <b>' + esc(rolls[0].title) + '</b> : ' + esc(rolls[0].total) + '</span>';
     return s;
   }
+  /* durées d'effets (lot 4) : seulement celles de ses propres personnages (la vue n'en contient jamais pour un ennemi) */
+  function duOne(e) { var n = e.n | 0; return ' · ' + (n > 0 ? '<b class="dur-n">' + esc(n) + '</b> round' + (n > 1 ? 's' : '') + ' restant' + (n > 1 ? 's' : '') : '<b class="dur-n z">0</b> effet terminé'); }
+  function duTxt(c, k) { var a = c && c.du || [], i; for (i = 0; i < a.length; i++) if (a[i].k === k) return duOne(a[i]); return ''; }
   /* contexte fourni aux constructeurs d'onglets (combat-onglets.js) */
   function cxOf(view, me) {
     var memo = {}, b = bagNow(), slots = H.slotInfo ? H.slotInfo() : null, allSp = spellRows(), dv = deckOf(allSp);

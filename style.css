@@ -2388,3 +2388,16 @@ header.mjbar::after { content: none; }
 .btn.sndlibbtn { min-height: 44px; justify-content: flex-start; text-align: left; }
 #sndLib { gap: 10px; padding-top: 4px; }
 @media (max-width: 700px) { #sndPanel .sndtile, #sndPanel .sndfx { min-height: 52px; } #sndPanel .sndtile { min-height: 72px; } }
+
+/* Lot 4 combat : durées d'effets en rounds (puce, alerte « effet terminé », formulaire) ; touches >= 44 px */
+.dur-n { display: inline-block; min-width: 1.35em; margin-left: 3px; padding: 0 5px; border-radius: 999px; background: color-mix(in srgb, currentColor 18%, transparent); font-size: .78rem; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; }
+.dur-n.z { background: var(--warn); color: var(--on-primary, #fff); }
+.conc-rem.dur-end { flex-wrap: wrap; }
+.conc-rem.dur-end > span:first-child { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
+.dur-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.durform { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 8px; margin-top: 8px; }
+.durform label { display: flex; flex-direction: column; gap: 2px; flex: 1 1 130px; min-width: 0; font-size: .78rem; color: var(--muted); }
+.durform input { box-sizing: border-box; width: 100%; min-height: 44px; padding: 0 10px; font-size: 1rem; }
+.durform input[aria-invalid="true"] { border-color: var(--warn); outline: 2px solid var(--warn); }
+.durform .btn { min-height: 44px; flex: 0 0 auto; }
+.durform .dur-hint { flex: 1 1 100%; margin: 0; }

@@ -11,7 +11,7 @@ body.cs-simple #pvScene { display: none !important; }
 body.cs-simple:not(.cs-mj) #jdock { display: none !important; }
 
 /* ---- carte de combattant réduite à l'essentiel : en-tête, PV, dégâts/soin/PV temp., états, outils ---- */
-body.cs-simple #list .card .body > :not(.head):not(.hpline):not(.dmg):not(.death):not(.conc-rem):not(.chips):not(.notes):not(.tools):not(.editgrid) { display: none; }
+body.cs-simple #list .card .body > :not(.head):not(.hpline):not(.dmg):not(.death):not(.conc-rem):not(.durform):not(.chips):not(.notes):not(.tools):not(.editgrid) { display: none; }
 body.cs-simple #list .card .tools [data-act="acts"],
 body.cs-simple #list .card .tools [data-act="sheet"],
 body.cs-simple #list .card .tools [data-act="sum"] { display: none; }

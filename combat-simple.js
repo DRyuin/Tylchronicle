@@ -37,6 +37,48 @@
   function hidden(c, byId) { return !party(c, byId) && chainOf(c, byId).some(function (x) { return !!x.hid; }); }
   function plain(o) { return isObj(o) ? o : {}; }
 
+
+  /* ---------- durées d'effets en rounds (lot 4) : c.dur = [{ k: état ou sort, n: rounds restants, l: dernier round décompté, s: pas de décompte avant ce round }] ----------
+     Règle : le compteur baisse de 1 au DÉBUT du tour de celui qui porte l'effet (en avançant seulement). Un effet posé pendant le tour du porteur, ou après lui dans le round, commence au round suivant.
+     À 0 l'effet n'est jamais retiré tout seul : le MJ voit une alerte (Retirer / Prolonger +1). Revenir en arrière défait le décompte du tour quitté (l = round). */
+  var DUR_MAX = 999, DUR_N = 12;
+  function durParse(t) {
+    var s = String(t == null ? '' : t).toLowerCase().replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, '');
+    var m = /^(\d{1,4}) ?(rounds?|tours?|minutes?|mins?|heures?|r|m|h)?\.?$/.exec(s);
+    if (!m) return 0;
+    var u = m[2] || '', f = /^(minute|min|m)/.test(u) ? 10 : /^(heure|h)/.test(u) ? 600 : 1;
+    return Math.max(0, Math.min(DUR_MAX, parseInt(m[1], 10) * f));
+  }
+  function durNorm(a) {
+    var out = [], seen = {};
+    (Array.isArray(a) ? a : []).forEach(function (e) {
+      if (!isObj(e) || out.length >= DUR_N) return;
+      var k = str(e.k, 40).replace(/^\s+|\s+$/g, '');
+      if (!k || seen[k]) return;
+      seen[k] = 1;
+      out.push({ k: k, n: Math.max(0, Math.min(DUR_MAX, int(e.n, 0))), l: Math.max(0, Math.min(99999, int(e.l, 0))), s: Math.max(0, Math.min(99999, int(e.s, 0))) });
+    });
+    return out;
+  }
+  /* début du tour de c au round donné : retourne les noms des effets arrivés à 0 */
+  function durTick(c, round) {
+    var ended = [];
+    (c && Array.isArray(c.dur) ? c.dur : []).forEach(function (e) {
+      var l = int(e.l, 0) > round ? 0 : int(e.l, 0), s = int(e.s, 0) > round ? 0 : int(e.s, 0);
+      if (int(e.n, 0) > 0 && round > s && round > l) { e.n = int(e.n, 0) - 1; e.l = round; if (e.n === 0) ended.push(e.k); }
+    });
+    return ended;
+  }
+  /* on quitte (en arrière) le tour de c au round donné : le décompte fait à son arrivée est défait */
+  function durUntick(c, round) {
+    (c && Array.isArray(c.dur) ? c.dur : []).forEach(function (e) {
+      if (round > 0 && int(e.l, 0) === round) { e.n = Math.min(DUR_MAX, int(e.n, 0) + 1); e.l = round - 1; }
+    });
+  }
+  function viewDur(c) {
+    return (Array.isArray(c.dur) ? c.dur : []).slice(0, DUR_N).filter(isObj).map(function (e) { return { k: str(e.k, 40), n: Math.max(0, Math.min(DUR_MAX, int(e.n, 0))) }; });
+  }
+
   function viewParty(c) {
     var e = plain(c.eco), d = plain(c.ds);
     var o = {
@@ -48,6 +90,7 @@
     };
     if (isObj(c.lg)) o.lg = { max: Math.max(1, int(c.lg.max, 3)), used: Math.max(0, int(c.lg.used, 0)) };
     if (Array.isArray(c.cr) && c.cr.length) o.cr = c.cr.slice(-6).map(function (x) { return Math.max(1, Math.min(999, int(x, 10))); });   /* rappels de concentration (DD) : PJ et compagnons seulement */
+    if (Array.isArray(c.dur) && c.dur.length) o.du = viewDur(c);   /* durées des effets : PJ et compagnons seulement (jamais un ennemi) */
     if (c.atk) o.atk = str(c.atk, 200);   /* attaques notées par le MJ sur la carte du PJ : armes de la page joueuse (C2) */
     if (c.cid) o.cid = str(c.cid, 40);
     return o;
@@ -83,7 +126,7 @@
     v.combatants = shown;
     /* garde-fou de taille (octets) : ressources détaillées, puis petits champs, puis ennemis en fin de liste, puis le reste */
     if (bytes(v) > VIEW_MAX) shown.forEach(function (c) { if (c.pw) c.pw = {}; });
-    if (bytes(v) > VIEW_MAX) shown.forEach(function (c) { delete c.pw; delete c.eco; delete c.ds; });
+    if (bytes(v) > VIEW_MAX) shown.forEach(function (c) { delete c.pw; delete c.eco; delete c.ds; delete c.du; });
     var i;
     for (i = shown.length - 1; i >= 0 && bytes(v) > VIEW_MAX; i--) if (shown[i].ac == null) shown.splice(i, 1);
     while (shown.length && bytes(v) > VIEW_MAX) shown.pop();
@@ -155,6 +198,10 @@
   }
 
   api.WORDS = WORDS;
+  api.durParse = durParse;
+  api.durNorm = durNorm;
+  api.durTick = durTick;
+  api.durUntick = durUntick;
   api.hiddenIds = hiddenIds;
   api.forbidden = forbidden;
   api.isParty = isParty;
@@ -338,7 +385,9 @@
 
   /* bandeau « tour en cours » réduit (remplace le menu complet du tour d'un monstre) */
   function nowHTML(a) {
-    var S = getS(), cs = (a.conds || []).map(function (x) { return '<span class="chip on">' + esc(x) + '</span>'; }).join('');
+    var S = getS(), du = {}, cs;
+    (Array.isArray(a.dur) ? a.dur : []).forEach(function (e) { du[e.k] = int(e.n, 0); });
+    cs = (a.conds || []).map(function (x) { return '<span class="chip on">' + esc(x) + (du[x] != null ? ' <b class="dur-n">' + du[x] + '</b>' : '') + '</span>'; }).join('');
     return '<div class="cs-now"><span class="cs-round">Round ' + esc(S.round) + '</span> Au tour de <b>' + esc(a.name) + '</b><span class="muted"> · PV ' + esc(a.hp) + '/' + esc(a.max) + ' · CA ' + esc(a.ac) + '</span>' + (a.hid ? ' <span class="state cs-tag">Caché</span>' : '') + (cs ? '<div class="chips">' + cs + '</div>' : '') + '</div>';
   }
 
