@@ -334,6 +334,40 @@
     } catch (e) { /* ignoré */ }
   }
 
+  // Bandeau « Connexion temps réel perdue » (lot 6) : discret, dans le flux (en tête de page, ne recouvre
+  // rien), seulement si un canal Realtime (documents ou room) reste en erreur plus de RT_BANNER_MS ;
+  // retiré dès que tous les canaux sont revenus (SUBSCRIBED). Absent du DOM si tout va bien.
+  // La relecture toutes les 30 s (POLL_MS) continue pendant ce temps.
+  var RT_BANNER_MS = 10000, rtBad = {}, rtTimers = {}, rtShown = false, rtEl = null;
+  function rtRender() {
+    try {
+      var want = rtShown && !signedOut && document && document.body;
+      if (want && !rtEl) {
+        rtEl = el('div', { id: 'tyl-rt', role: 'status', 'aria-live': 'polite',
+          style: 'margin:0;padding:4px 12px;text-align:center;font-size:13px;line-height:1.35;background:var(--brass-soft,#F5EAC6);color:var(--ink,#1D2924);border-bottom:1px solid var(--line,#DAD5C1)' });
+        document.body.insertBefore(rtEl, document.body.firstChild);
+        var shownEl = rtEl; // texte posé après l'insertion : la région « status » est alors annoncée
+        later(function () { if (rtEl === shownEl) shownEl.textContent = 'Connexion temps réel perdue, reconnexion en cours…'; }, 50);
+      } else if (!want && rtEl) {
+        if (rtEl.parentNode) rtEl.parentNode.removeChild(rtEl);
+        rtEl = null;
+      }
+    } catch (e) { /* ignoré */ }
+  }
+  function rtMark(key, bad) {
+    if (bad) {
+      if (rtBad[key]) return;
+      rtBad[key] = true;
+      rtTimers[key] = later(function () { rtTimers[key] = null; if (rtBad[key]) { rtShown = true; rtRender(); } }, RT_BANNER_MS);
+    } else {
+      if (!rtBad[key]) return;
+      delete rtBad[key];
+      if (rtTimers[key]) { clearTimeout(rtTimers[key]); rtTimers[key] = null; }
+      if (!Object.keys(rtBad).length) rtShown = false;
+      rtRender();
+    }
+  }
+
   // Session expirée ou révoquée (revue I6) : pas de rechargement (la dernière
   // écriture serait perdue). Écran de connexion par-dessus l'appli, écritures
   // refusées en « unavailable » (l'appli réessaie), reprise sans rechargement
@@ -342,7 +376,9 @@
   function onSignedOut() {
     if (leaving || signedOut) return;
     signedOut = true;
-    showLogin('Session expirée, reconnecte-toi.');
+    rtRender();
+    // Déconnexion non demandée ici (leaving faux) : le plus souvent une déconnexion faite sur un autre appareil ou navigateur.
+    showLogin('Tu as été déconnecté (peut-être depuis un autre appareil ou navigateur). Reconnecte-toi.');
   }
   function onSession(s) {
     if (!s || !s.user) return;
@@ -351,6 +387,7 @@
       if (signedOut) {
         signedOut = false;
         hideLogin();
+        rtRender();
         authSync();
         Object.keys(cols).forEach(function (k) { refresh(cols[k]); });
         if (roomNs && roomNs.__resume) roomNs.__resume();
@@ -449,7 +486,9 @@
     leaving = true;
     stoDel('sessionStorage', GATE_KEY);
     var done = function () { reload(); };
-    try { return Promise.resolve(client.auth.signOut()).then(done, done); } catch (e) { done(); return Promise.resolve(); }
+    // Lot 6 : scope 'local' = cet appareil seulement. Sans option, supabase-js v2 vaut 'global' et ferme
+    // TOUTES les sessions du compte (les autres appareils tombaient en « refresh_token_not_found »).
+    try { return Promise.resolve(client.auth.signOut({ scope: 'local' })).then(done, done); } catch (e) { done(); return Promise.resolve(); }
   };
 
   // ---------------------------------------------------------------------
@@ -890,7 +929,7 @@
   // Session invalide pendant le choix : retour à l'écran de connexion.
   function gateExpired(text) {
     closeGateState();
-    try { Promise.resolve(client.auth.signOut()).then(null, function () { /* ignoré */ }); } catch (e) { /* ignoré */ }
+    try { Promise.resolve(client.auth.signOut({ scope: 'local' })).then(null, function () { /* ignoré */ }); } catch (e) { /* ignoré */ }
     openLogin('signin', text);
   }
 
@@ -1358,15 +1397,18 @@
     if (C.dead || C.status === 'denied') return;
     C.status = String(status || '');
     if (status === 'SUBSCRIBED') {
+      rtMark('c:' + C.name, false);
       stopPoll(C);
       if (C.initTimer) { clearTimeout(C.initTimer); C.initTimer = null; }
       refresh(C); // première lecture, ou relecture après reconnexion
     } else {
       if (err) noteErr('channel.' + C.name + '.' + status, err);
+      rtMark('c:' + C.name, true);
       if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') && err && DENIED_RE.test(String(err.message || err))) {
         // Refus d'autorisation : inutile de réessayer (realtime-js le ferait
         // sans fin). Relecture périodique seulement, jusqu'au rechargement.
         C.status = 'denied';
+        rtMark('c:' + C.name, false); // refus définitif : rien à « reconnecter »
         var c = C.channel; C.channel = null;
         try { if (c) Promise.resolve(client.removeChannel(c)).then(null, function () {}); } catch (e) { /* ignoré */ }
       }
@@ -1376,6 +1418,7 @@
 
   function closeCol(C) {
     C.dead = true;
+    rtMark('c:' + C.name, false);
     stopPoll(C);
     if (C.initTimer) clearTimeout(C.initTimer);
     if (C.retryTimer) clearTimeout(C.retryTimer);
@@ -1914,6 +1957,7 @@
     function stopRoom(status) {
       stopped = true;
       roomState.status = status;
+      if (status === 'denied') rtMark('room', false);
       setUp(false);
       var c = ch; ch = null;
       if (c) {
@@ -1933,8 +1977,9 @@
     function onStatus(c, status, err) {
       if (stopped || c !== ch) return;
       roomState.status = String(status || '');
-      if (status === 'SUBSCRIBED') { nErr = 0; retryN = 0; setUp(true); return; }
+      if (status === 'SUBSCRIBED') { nErr = 0; retryN = 0; rtMark('room', false); setUp(true); return; }
       if (err) noteErr('room.' + status, err);
+      rtMark('room', true);
       setUp(false);
       if (status !== 'CHANNEL_ERROR' && status !== 'TIMED_OUT') return;
       if (err && ROOM_DENIED_RE.test(String(err.message || err))) stopRoom('denied');
